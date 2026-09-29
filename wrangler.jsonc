@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "placa-nfc",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "bc6f8a86-9019-4fbb-ba3f-eaaf79d5378e",
       "migrations_dir": "migrations",
     },
   ],
