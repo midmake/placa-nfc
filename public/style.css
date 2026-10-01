@@ -5,9 +5,9 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #1c2e28;
-  background: #f5f7f6;
-  --green: #164c3c;
+  color: #183238;
+  background: #f4f7f7;
+  --green: #115c58;
 }
 * {
   box-sizing: border-box;
@@ -24,11 +24,231 @@ header {
   border-bottom: 1px solid #dce4df;
 }
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 20px;
   font-weight: 850;
   color: var(--green);
   text-decoration: none;
   letter-spacing: -0.5px;
+}
+[hidden] {
+  display: none !important;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 2px;
+  font-weight: 750;
+  color: #47736e;
+  margin: 0 0 10px;
+}
+.brand .brand-wordmark {
+  font-size: 19px;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+}
+.brand .brand-wordmark span {
+  font-size: 10px;
+  letter-spacing: 3px;
+  margin-top: 4px;
+}
+.full {
+  width: 100%;
+}
+.login-view {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 15% 45%, #174b46 0, transparent 55%),
+    radial-gradient(ellipse at 95% 20%, #142f44 0, transparent 55%), #0d1b22;
+  color: #fff;
+}
+.login-view header {
+  background: transparent;
+  border-bottom: 1px solid #ffffff15;
+}
+.login-view .brand,
+.login-view footer a {
+  color: #ddfff6;
+}
+.login-view .tagline {
+  color: #a7bbb8;
+}
+.login-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+  min-height: 65vh;
+  padding: 25px 0;
+}
+.login-intro h1 {
+  font-size: clamp(32px, 4vw, 46px);
+  line-height: 1.15;
+  letter-spacing: -1.5px;
+  margin: 20px 0;
+}
+.login-intro p:not(.eyebrow),
+.login-intro small {
+  color: #b0c8c4;
+}
+.login-intro .eyebrow {
+  color: #75e9d2;
+  margin-top: 24px;
+}
+.login-panel {
+  color: #183238;
+  padding: 30px;
+  border: 1px solid #a4ead428;
+  box-shadow: 0 24px 80px #0003;
+  border-radius: 18px;
+}
+.signal-line {
+  height: 2px;
+  width: 96px;
+  background: linear-gradient(90deg, #6df9d5, transparent);
+  margin: 30px 0;
+}
+.login-view footer {
+  color: #b0c8c4;
+}
+.login-view .install-help {
+  display: none;
+}
+.physical-code {
+  font-family: ui-monospace, monospace;
+  font-size: 24px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.code-label {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.5px;
+}
+.badge.blocked {
+  background: #f7e9e9;
+  color: #942e35;
+}
+.chip-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.plate-line {
+  padding: 16px 0;
+  border-bottom: 1px solid #e3ece9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.plate-line:last-child {
+  border-bottom: 0;
+}
+.plate-line p {
+  margin: 6px 0 0;
+}
+.plate-line .actions {
+  margin: 0;
+}
+.seller-group summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.seller-group summary span {
+  font-size: 14px;
+  color: #52675d;
+}
+.lot-counts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+.lot-counts div {
+  padding: 12px;
+  border-radius: 8px;
+  background: #f4f8f7;
+}
+.lot-counts span {
+  font-size: 12px;
+  color: #52675d;
+  display: block;
+}
+.lot-counts strong {
+  font-size: 25px;
+  letter-spacing: -0.7px;
+}
+.batch-card details {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.match-panel {
+  background: #eef8f4;
+  border: 1px solid #b5d7c9;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.install-help {
+  max-width: 620px;
+  margin-top: 12px;
+}
+#install-app {
+  margin-left: 16px;
+}
+.client-card {
+  border-top: 3px solid #d3ece4;
+}
+@media (max-width: 650px) {
+  .login-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    min-height: auto;
+    padding: 0;
+  }
+  .login-intro {
+    padding: 8px 4px;
+  }
+  .login-intro > img {
+    width: 54px;
+    height: 54px;
+  }
+  .login-intro h1 {
+    font-size: 32px;
+    margin: 12px 0;
+  }
+  .login-intro .eyebrow {
+    margin-top: 10px;
+  }
+  .login-intro small,
+  .signal-line {
+    display: none;
+  }
+  .login-panel {
+    padding: 22px;
+  }
+  .lot-counts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .plate-line {
+    align-items: stretch;
+  }
+  .plate-line .actions {
+    width: 100%;
+  }
+  .tagline {
+    display: none;
+  }
+  main {
+    padding-bottom: 16px;
+  }
+  .brand .brand-wordmark {
+    font-size: 17px;
+  }
 }
 .brand span {
   font-size: 12px;

@@ -3,14 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#164c3c" />
+    <meta name="theme-color" content="#102729" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Gear Go" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Gear Go Digital · Placas</title>
     <link rel="stylesheet" href="/style.css" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <script src="/flow.js" defer></script>
+    <script src="/operations-ui.js" defer></script>
     <script src="/app.js" defer></script>
+    <script src="/pwa.js" defer></script>
   </head>
   <body>
     <header>
-      <a class="brand" href="/">GEAR GO <span>DIGITAL</span></a
+      <a class="brand" href="/"
+        ><img src="/logo.svg" width="42" height="42" alt="" />
+        <span class="brand-wordmark">GEAR GO <span>DIGITAL</span></span></a
       ><span class="tagline">Gestão de placas</span>
     </header>
     <div id="notice" role="status" aria-live="polite"></div>
@@ -18,6 +30,21 @@
     <main id="app"><p>Carregando…</p></main>
     <footer>
       <a href="/privacidade.html">Privacidade e tratamento de dados</a>
+      <button id="install-app" class="secondary" hidden>
+        Instalar Gear Go
+      </button>
+      <details class="install-help">
+        <summary>Adicionar à tela inicial</summary>
+        <p>
+          No iPhone: abra este endereço no Safari, toque em Compartilhar e
+          depois em Adicionar à Tela de Início. No Android: use Instalar Gear Go
+          ou o menu do navegador → Instalar aplicativo.
+        </p>
+        <p>
+          É necessário estar conectado à internet para acessar clientes, ativar
+          placas ou alterar dados.
+        </p>
+      </details>
     </footer>
   </body>
 </html>

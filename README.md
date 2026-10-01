@@ -1,242 +1,163 @@
 # Gear Go Digital — placa-nfc
 
-MVP de placas físicas com QR dinâmico. Repositório exclusivo: **midmake/placa-nfc**.
-NFC é gravado manualmente fora desta aplicação. Não há cadastro público, pagamentos,
-comissões, analytics de scans ou editor de arte.
+Plataforma de placas de avaliação Google. Repositório exclusivo: **midmake/placa-nfc**.
+Worker TypeScript + Assets + D1. Autenticação existente preservada. NFC é configurado
+fora da plataforma; o bloqueio vale para qualquer acesso à URL Gear Go, inclusive NFC
+gravado com essa URL. NFC gravado diretamente com link Google não passa pelo Worker.
 
-## Arquitetura
+## Rodada operacional V2
 
-- Um Cloudflare Worker TypeScript: API, autenticação, autorização e `/r/<código>-<token>`.
-- Workers Assets: HTML/CSS/JavaScript responsivos, sem framework ou CDN.
-- D1: usuários, sessões, lotes, placas, estabelecimentos, categorias e auditoria.
-- SQL parametrizado e migrations versionadas. Sem dependências de runtime externas.
-- Interface, API e redirects na mesma origem. Deploy único em `workers.dev`.
+Admin cria lote → gráfica imprime → vendedor confirma código físico → ativa cliente.
+Não existe estoque de vendedor. A atribuição acontece atomicamente na conclusão.
 
-```
-src/index.ts          API e regras de acesso
-src/security.ts       senhas, tokens e sessões
-src/google-url.ts     política de destinos Google
-public/               painel e aviso de privacidade
-migrations/           schema e proteções de integridade
-scripts/create-admin.ts  bootstrap CLI (sem endpoint público)
-tests/                validação de URLs e integração com SQLite
-```
+- Lotes de 1 a 5.000 unidades, geração retomável em partes de 200 e criação idempotente.
+- Código físico `A3009-K7Q2`, alfabeto sem O/0/I/1, unicidade no banco e retry de colisões.
+- Código físico separado do QR forte. Rotas antigas `/r/A00001-<token>` preservadas.
+- QR inativo abre login/ativação; placa permanece no fluxo após login/troca de senha.
+- Painel e QR usam os mesmos endpoints de confirmação/ativação, sem atalho por ID.
+- Prova de código por sessão, válida por 15 min, uso único e limite de tentativas.
+- Vendedor vê seus clientes e placas ativas, inclusive status de bloqueio.
+- Admin: lotes, placas agrupadas por vendedor, busca, reserva administrativa excepcional.
+- Bloqueio individual/em massa reversível; mensagem pública neutra, sem apagar dados.
+- Auditoria imutável com filtros por natureza, snapshots, autor e horário.
+- PWA standalone, ícones PNG/SVG, orientação iPhone; sem cache de dados/redirects.
+- CSV e dados paginados para PDF. Gerador PDF vetorial no navegador/Web Worker.
+- **PDF comercial pendente das duas artes aprovadas.** Não foi inventado layout final.
+- Produção exige origem definitiva configurada e confirmada; modo teste separado.
 
-Estabelecimento é o cadastro comercial principal: contém o destino e pode ter muitas
-placas. Alterar seu destino atualiza todas as placas, sem reimprimir. O destino não
-é duplicado em cada placa. Cada estabelecimento e suas placas têm um responsável.
-Sugestões de duplicidade são limitadas ao mesmo responsável para não revelar dados de
-outro usuário. O admin pode ver toda a base. Transferência de placas ativas entre
-responsáveis fica bloqueada no MVP; não há fusão automática de empresas.
+## ATENÇÃO: banco de produção inicializado manualmente
 
-## Rodar localmente
+**Não reaplique a migration 0001 em produção. Não apague/recrie tabelas ou banco.**
 
-Use Node.js 22.13+ (testado com Node 24), npm e um terminal na pasta `placa-nfc`.
-Antes de qualquer alteração, confira `git remote -v`.
+Leia [docs/DEPLOY_V2.md](docs/DEPLOY_V2.md). A ordem é:
+backup → pré-verificação → somente `0002_operations.sql` → conferir → merge/deploy.
+
+A branch `feat/operacao-placas-v2` deve ser mesclada em main apenas depois da migration.
+O deploy automático atual continua com `npm run build` / `npm run deploy`.
+Nenhuma migration roda automaticamente nesses comandos.
+
+`PASSWORD_PEPPER`, contas, senhas, sessões, tokens, clientes e histórico existentes
+não devem ser recriados. A V2 **não altera o algoritmo de senha ou o secret**.
+
+## Desenvolvimento local
+
+Node 22.13+ (testado com 24). Na pasta do repositório, confira `git remote -v`.
 
 ```sh
 npm ci
-```
-
-Crie **`.dev.vars`** (ignorado pelo Git):
-
-```dotenv
-PASSWORD_PEPPER=COLOQUE_UM_SEGREDO_ALEATORIO_COM_PELO_MENOS_32_CARACTERES
-```
-
-Gere o valor com um gerenciador de senhas ou `openssl rand -hex 32`.
-Não reutilize o segredo local em produção.
-
-```sh
 npm run db:local
-export GG_ADMIN_EMAIL='seu-email@example.com'
-export GG_ADMIN_NAME='Administrador Gear Go'
-read -rs -p 'Senha temporária do admin (mínimo 12): ' GG_ADMIN_PASSWORD
-export GG_ADMIN_PASSWORD
-npm run admin
-unset GG_ADMIN_PASSWORD
 npm run dev
 ```
 
-Abra a URL local indicada pelo Wrangler. O primeiro admin também precisa trocar a
-senha no primeiro acesso. O script falha se o e-mail já existir; não substitui usuários.
-O arquivo SQL temporário é privado, fica em `.wrangler/` e é removido ao terminar.
-Não existem credenciais padrão, seed de usuários públicos ou backdoor de instalação.
+`db:local` serve para base local nova gerenciada pelo Wrangler. Se uma base local já
+tiver o schema inicial aplicado manualmente, use `npm run db:v2:local`.
 
-## Configurar Cloudflare — plano gratuito
+Crie `.dev.vars` ignorado pelo Git, com pepper aleatório exclusivo de desenvolvimento:
 
-A conta e a autenticação Cloudflare são necessárias. Não habilite plano pago.
-A aplicação foi projetada para o piloto de 50 placas; gratuidade depende das cotas da
-conta. O deploy público e as cotas reais de CPU ainda precisam ser verificados na conta.
-
-```sh
-npx wrangler login
-npx wrangler whoami
-npx wrangler d1 create placa-nfc
+```dotenv
+PASSWORD_PEPPER=um-segredo-local-aleatorio-com-pelo-menos-32-caracteres
 ```
 
-Copie o `database_id` retornado para a entrada **DB** em `wrangler.jsonc`, substituindo
-`00000000-0000-0000-0000-000000000000`. O ID não é uma credencial.
-Não aponte esse projeto para banco, Worker ou domínio de outro projeto.
+Não copie o secret de produção para testes. Para criar admin apenas em base nova:
 
 ```sh
-npm run db:remote
-npx wrangler secret put PASSWORD_PEPPER
-```
-
-No prompt, informe um segredo exclusivo de produção (mínimo 32 caracteres aleatórios).
-Guarde-o num gerenciador de senhas. Ele não vai para o repositório ou front-end.
-Para automação futura, use `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` como secrets
-do ambiente, com escopo restrito à conta e às operações Workers/D1 necessárias;
-nunca no código, em URL ou mensagem de commit.
-
-### Primeiro administrador remoto
-
-Use exatamente o mesmo pepper salvo na Cloudflare, sem imprimi-lo:
-
-```sh
-read -rs -p 'Pepper de produção: ' PASSWORD_PEPPER
-export PASSWORD_PEPPER
-export GG_ADMIN_EMAIL='seu-email@example.com'
+export GG_ADMIN_EMAIL='admin@example.com'
 export GG_ADMIN_NAME='Administrador Gear Go'
-read -rs -p 'Senha temporária do admin: ' GG_ADMIN_PASSWORD
+read -rs -p 'Senha temporária (mínimo 12): ' GG_ADMIN_PASSWORD
 export GG_ADMIN_PASSWORD
-npm run admin -- --remote
-unset GG_ADMIN_PASSWORD PASSWORD_PEPPER
+npm run admin
+unset GG_ADMIN_PASSWORD
 ```
 
-### Publicar
+A troca de senha é obrigatória. Produção já possui admin: não execute bootstrap lá.
 
-```sh
-npm test
-npm run build
-npm run deploy
-```
-
-O Wrangler informa a URL `https://placa-nfc.<seu-subdominio>.workers.dev`.
-Não configure domínio próprio neste piloto. Se o painel oferecer apenas upload de
-arquivos estáticos, esse fluxo não basta: é necessário publicar também o Worker/D1.
-
-Opcionalmente configure a variável pública `PUBLIC_BASE_URL` com a origem final
-`https://placa-nfc.<seu-subdominio>.workers.dev`, sem caminho, para fixar as URLs dos
-CSVs. Por padrão é usada a origem atual da aplicação.
-
-**URLs impressas não migram sozinhas.** Use o endereço temporário em placas de teste.
-Se uma placa for vendida com esse endereço, mantenha esse Worker/endereço funcionando
-mesmo depois de adicionar domínio próprio. Não renomeie o Worker nem regenere tokens.
-
-## Operação do piloto
-
-1. Entre como admin e troque a senha temporária.
-2. Em **Usuários**, crie o responsável e entregue a senha temporária por canal privado.
-3. Em **Lotes**, crie `Piloto 01`, quantidade `50`, com ou sem responsável.
-4. Atribua o lote ou placas disponíveis individualmente. Lotes com placas ativas
-   não podem ser transferidos em conjunto.
-5. Baixe o CSV: `codigo,url`, UTF-8 com BOM e linhas CRLF.
-6. No Canva, mantenha código e QR da mesma linha. O CSV contém as URLs; ele não é um
-   pacote de imagens QR. Gere os QRs a partir dessas URLs usando um fluxo de QR em lote
-   compatível com seu Canva e confira a leitura antes de imprimir.
-7. Usuário entra, troca senha e ativa a placa. Pode selecionar um cadastro existente
-   imediatamente ou preencher o formulário. Possíveis duplicidades exigem escolha.
-8. No estabelecimento, use **+ Vincular outra placa** para adicionar mais placas.
-9. **Testar QR** abre a mesma URL que será impressa; uma placa não ativada exibe um aviso.
-10. Admin pesquisa leads por nome, telefone, cidade, segmento ou código e consulta
-    histórico geral ou do estabelecimento.
-
-Não há registro automático de vendas, receitas ou comissões. Até 100 placas por lote,
-com inserts agrupados para respeitar limites de consultas e parâmetros no plano Free.
-Listas são limitadas a 500 resultados (a interface pede refinar a busca); auditoria
-paginada em grupos de 100, sem apagar entradas antigas. Novas categorias podem ser
-incluídas pelo admin na API `POST /api/categories` com JSON `{ "name": "Categoria" }`.
-
-## Segurança e integridade
-
-- Token por placa: 24 bytes aleatórios (192 bits) com Web Crypto, além do código sequencial.
-- Sessão aleatória de 32 bytes, somente hash SHA-256 no banco, expiração de 12h.
-- Cookie HttpOnly, SameSite=Strict e Secure em HTTPS. Nunca localStorage.
-- Hash de senha: PBKDF2-SHA256, salt aleatório por usuário, 100.000 iterações,
-  precedido por HMAC-SHA256 com pepper exclusivo guardado em secret Cloudflare.
-  O fator usa o teto tradicional do WebCrypto no Workers; não equivale à recomendação
-  OWASP de 600.000 iterações para PBKDF2-SHA256. O pepper, senhas de pelo menos 12
-  caracteres, rate limit e acesso restrito mitigam esse compromisso do MVP.
-  Reavaliar KDF e CPU antes de abrir a revendedores externos; não reduzir o custo
-  silenciosamente para caber em cota. Perder/alterar o pepper invalida as senhas.
-- Limite de login por e-mail e IP, usando hashes das chaves, com janela de 15 minutos.
-- Reset e troca de senha revogam todas as sessões. Troca temporária obrigatória no servidor.
-- Autorização em cada endpoint; não basta esconder botões. Dados de outro responsável
-  retornam 404. Histórico e CSV de produção são exclusivos do admin.
-- Proteção de origem nas mutações e JSON obrigatório. CSP sem scripts externos/inline.
-- Auditoria e mutação na mesma transação D1. Controle de versão evita sobrescrita
-  silenciosa de cadastros; guardas SQL abortam operações concorrentes inconsistentes.
-- Triggers protegem o histórico, snapshot inicial e identidade/token das placas.
-  Um operador com acesso administrativo direto ao banco ainda pode alterar o schema;
-  essas proteções não substituem controle de acesso à conta Cloudflare.
-- Auditoria guarda snapshots anterior/novo, data e autor. Não registra senhas, hashes
-  de senha ou cookies. A ativação inicial preserva `initial_snapshot`.
-- Nada de cache nos redirects, respostas autenticadas ou CSV. Nada de analytics de scans.
-
-### Destinos aceitos
-
-`src/google-url.ts` é o ponto único de extensão. Aceita HTTPS com hosts exatos verificados
-`google.com` / `google.com.br`, variantes `www`, `maps`, `search`, em caminhos Maps e
-`/local/writereview`, além de `maps.app.goo.gl`, `g.page` e `goo.gl/maps`.
-Não se aceita qualquer serviço Google: Sites, Docs, Pay, `/url`, credenciais embutidas,
-portas não padrão, fragmentos, lookalikes e parâmetros de redirecionamento são recusados.
-
-Links curtos são expandidos na gravação, hop por hop, com timeout, no máximo cinco
-redirecionamentos e sem visitar hosts/caminhos não permitidos. Salva-se o destino
-Google completo. Se o Google não permitir expansão, o formulário pede o link completo
-sem perder os campos. Não há promessa de que o conteúdo ou comportamento futuro de
-um serviço externo será imutável; o validador é uma defesa de domínio/caminho.
-Os formatos reais fornecidos pelos primeiros clientes devem ser testados em produção.
-
-## Testes e validação
+## Comandos
 
 ```sh
 npm test
 npm run typecheck
 npm run build
-npm run db:local
+npm run dev
+npm run db:remote        # Somente pré-verificação remota, não aplica migrations
+npm run db:v2:remote     # Aplica apenas V2 após pré-verificação; faça backup antes
+npm run deploy          # Publicação manual quando autorizada, após migration
 ```
 
-Os testes executam handlers reais com SQLite em memória, schema completo, transações,
-triggers e um adaptador da API D1. Cobrem login, senha obrigatória, sessões, isolamento,
-lote de 50, atribuição, CSV, ativação, detecção de duplicidade, várias placas por empresa,
-redirect antes/depois da edição, histórico imutável, conflitos, reset e URLs maliciosas.
-Não são um substituto de teste em D1 remoto e navegador móvel.
+O build empacota o gerador de PDF em `public/print-worker.js`. Esse arquivo gerado
+é ignorado pelo Git; bibliotecas são locais, sem CDN. Os ícones raster já são
+versionados e derivam do SVG original. `scripts/render-icons.mjs` é helper opcional.
 
-Smoke test após deploy:
+## Organização
 
-- Admin: crie dois usuários e atribua placas separadas.
-- Usuário 1: tente abrir/editar o ID de estabelecimento ou placa do usuário 2; deve falhar.
-- Ative duas placas para a mesma empresa e confirme cadastro único.
-- Abra o CSV e teste URLs impressas, antes e depois de editar o destino.
-- Confira telefone anterior, novo, autor e horário no histórico.
-- Faça logout/reset e confira que o cookie antigo não funciona.
-- Teste em Safari/iPhone e Chrome/Android: login, troca obrigatória, ativação, edição,
-  busca de segmento e botões sem rolagem horizontal em 360–390px.
-- Cole links reais `maps.app.goo.gl` e `g.page` de um estabelecimento; confira destino.
-- Verifique erros e CPU no painel Workers, especialmente login no plano gratuito.
+- `src/index.ts`: entrada HTTP, autenticação existente, usuários e estabelecimentos.
+- `src/core.ts`: helpers compartilhados, autorização, validação, transações.
+- `src/operations.ts`: ativação, lotes, atribuição, bloqueio, exports e auditoria.
+- `src/physical-code.ts`: formato, alfabeto, aleatoriedade e data de São Paulo.
+- `src/security.ts`: hash de senha e tokens existentes, sem mudança de algoritmo.
+- `src/google-url.ts`: validação de host/caminho e resolução segura de links curtos.
+- `src/print/`: motor de PDF e Web Worker; nenhuma renderização pesada no backend.
+- `public/app.js`: login, usuários, edição e histórico.
+- `public/operations-ui.js`: painéis operacionais e ativação compartilhada.
+- `public/flow.js`: preserva somente identificador QR válido, nunca redirect externo.
+- `public/print-templates.json`: dois templates ainda desabilitados, aguardando artes.
+- `migrations/0002_operations.sql`: alteração aditiva, sem reconstruir tabela.
+- `docs/DEPLOY_V2.md`: procedimento exato de produção e limitações de rollback.
+- `docs/PRINT_ARTS.md`: arquivos/medidas/áreas necessários para concluir impressão.
 
-### Estado da validação nesta implementação
+## Regras e segurança
 
-- Testes automatizados: aprovados.
-- TypeScript e build Worker: aprovados.
-- Migration em D1 local e criação de admin local: aprovadas.
-- Publicação e migration D1 remoto: pendentes de autenticação Cloudflare.
-- Navegador/mobile real: pendente; o servidor `wrangler dev` encontrou uma restrição
-  do ambiente (`uv_interface_addresses`) durante a validação inicial.
+Os estados antigos UNASSIGNED/AVAILABLE/ACTIVE permanecem. O bloqueio é um flag
+independente. Contadores do lote são exclusivos: ativas sem bloqueio + inativas sem
+bloqueio + todas bloqueadas = total. Reservas administrativas inativas não aparecem
+como estoque para vendedor.
+
+A prova de código não atribui placa. Ao concluir, o banco consome a prova, verifica
+estado/bloqueio/reserva e grava cliente, vínculo, vendedor e auditoria na mesma
+transação. Conflitos revertem tudo. Reatribuição/bloqueio invalidam provas pendentes.
+A confirmação expira em 15 minutos e é vinculada à sessão que a solicitou.
+
+Acesso server-side, SQL parametrizado, cookies HttpOnly/SameSite/Secure em HTTPS,
+sessões com expiração/revogação, proteção de origem, CSP e rate limiting são mantidos.
+Novos códigos usam Web Crypto com rejeição de viés e UNIQUE no banco. O QR forte
+permanece com token aleatório de 192 bits. O código curto confirma posse; não é token
+administrativo nem substitui autenticação. Não há cadastro público.
+
+Senhas continuam com o esquema já implantado PBKDF2-SHA256 100.000 iterações + salt +
+pepper HMAC. Esse fator é limitado pelo runtime e inferior à referência OWASP de
+600.000 para PBKDF2-SHA256; reavaliar KDF/CPU antes de ampliar o público. Não reduzir
+silenciosamente nem trocar o pepper: invalidaria as senhas existentes.
+
+O service worker é network-only. Nem QR, nem clientes, nem sessão, nem exports são
+servidos por cache offline. Instalar a PWA não torna ativação possível sem internet.
+
+## Impressão e domínio
+
+Por padrão, exporte em modo teste usando a origem atual. Arquivos de teste são
+identificados e não devem ir à gráfica. O PDF de teste tem marca sobre parte do QR.
+
+Para produção futura, configure `PUBLIC_BASE_URL` HTTPS definitivo e
+`QR_PRODUCTION_READY=true`. O painel exige confirmação explícita e fixa a origem
+no lote. Workers.dev/pages.dev não são aceitos para exportação final.
+Não desative a origem antiga de QRs já impressos quando migrar domínio.
+
+PDFs: uma placa por página, medidas exatas, QR vetorial com quiet zone, partes de até
+250 páginas. Lote de 1.000 produz quatro PDFs. O navegador faz o trabalho; o Worker
+fornece dados paginados. Não há editor gráfico, imposição, Canva nem conversão PDF/X.
+Veja [o que enviar para concluir as artes](docs/PRINT_ARTS.md).
+
+## Testes e verificação
+
+A suíte usa handlers reais, SQLite com migrations e triggers, testes de fluxo DOM,
+manifest/ícones e PDF. Inclui concorrência, migração legada sem d1_migrations,
+1000 códigos e dados paginados, bloqueios, auditoria e isolamento. O teste de PDF
+usa **fixture técnica**, não arte comercial, e valida 1.000 páginas em quatro partes.
+
+A aprovação de testes locais não substitui smoke test no D1 remoto, instalação real
+em iPhone/Android, CPU no plano Free e prova física da gráfica. Não há analytics,
+pagamentos, comissões, ERP ou outro escopo adicional.
 
 ## Privacidade
 
-`public/privacidade.html` é um aviso inicial para teste restrito, ligado ao formulário.
-Antes de uso público, complete controlador, contato, base legal, retenção/exclusão e
-transferências internacionais. Histórico imutável no painel não significa retenção
-eterna nem impede atendimento de obrigações legais por procedimento administrativo.
-
-## Referências técnicas
-
-- https://developers.cloudflare.com/workers/static-assets/
-- https://developers.cloudflare.com/d1/reference/migrations/
-- https://developers.cloudflare.com/d1/platform/limits/
-- https://developers.cloudflare.com/workers/runtime-apis/web-crypto/
+O aviso inicial está em `public/privacidade.html`. Complete identificação do
+controlador, canal de atendimento, base legal, retenção e transferências antes de
+abrir ao público. Histórico imutável no painel não implica retenção eterna.
