@@ -250,7 +250,7 @@ async function printScreen(id) {
     templates = await (
       await fetch("/print-templates.json", { cache: "no-store" })
     ).json();
-  app.innerHTML = `<section class="panel"><p class="eyebrow">MATERIAL PARA GRÁFICA</p><h1>Gerar PDF</h1><p class="wrap">Origem dos QRs: <strong>${esc(config.origin)}</strong></p><form id="print-form"><label>Finalidade<select name="mode"><option value="test">Teste — não enviar à gráfica</option><option value="production" ${config.production_ready ? "" : "disabled"}>Produção — domínio definitivo</option></select></label><label>Template<select name="template">${templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}${t.ready ? "" : " · arte pendente"}</option>`).join("")}</select></label><p class="hint">${config.production_ready ? "Ao selecionar produção, confirme a origem definitiva antes de exportar." : "Produção bloqueada até configurar PUBLIC_BASE_URL definitivo e QR_PRODUCTION_READY=true. O modo teste usa a origem atual."}</p><div class="actions"><button>Gerar PDF</button><button type="button" id="csv" class="secondary">Baixar CSV</button><button type="button" id="cancel-print" class="secondary">Voltar</button></div></form><div id="pdf-state" role="status"></div><div id="pdf-downloads"></div><p class="hint">As duas artes finais ainda não foram fornecidas. O gerador não inventa layout: QR, código, medidas e sangria só serão liberados para PDF após aprovação das artes.</p></section>`;
+  app.innerHTML = `<section class="panel"><p class="eyebrow">MATERIAL PARA GRÁFICA</p><h1>Gerar PDF</h1><p class="wrap">Origem dos QRs: <strong>${esc(config.origin)}</strong></p><form id="print-form"><label>Finalidade<select name="mode"><option value="test">Teste — não enviar à gráfica</option><option value="production" ${config.production_ready ? "" : "disabled"}>Produção — domínio definitivo</option></select></label><label>Template<select name="template">${templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}${t.ready ? "" : " · arte pendente"}</option>`).join("")}</select></label><p class="hint">${config.production_ready ? "Ao selecionar produção, confirme a origem definitiva antes de exportar." : "Produção bloqueada até configurar PUBLIC_BASE_URL definitivo e QR_PRODUCTION_READY=true. O modo teste usa a origem atual."}</p><div class="actions"><button>Gerar PDF</button><button type="button" id="csv" class="secondary">Baixar CSV</button><button type="button" id="cancel-print" class="secondary">Voltar</button></div></form><div id="pdf-state" role="status"></div><div id="pdf-downloads"></div><p class="hint">Arte oficial azul: 10 × 10 cm, sangria de 3 mm, QR e código individual nas posições aprovadas. A segunda cor aguarda arte. Cada PDF contém até 250 placas, uma por página.</p></section>`;
   const opts = () =>
     Object.fromEntries(new FormData(document.querySelector("#print-form")));
   const authorize = async (mode) => {
@@ -282,7 +282,7 @@ async function printScreen(id) {
       selected = templates.find((t) => t.id === template);
     if (!selected?.ready)
       throw new Error(
-        "PDF final aguardando as duas artes e as medidas aprovadas. CSV de teste já disponível.",
+        "Esta cor ainda aguarda arte aprovada. Selecione Oficial azul para gerar o PDF.",
       );
     if (!(await authorize(mode))) return;
     const mod = await import("/print-client.js");
@@ -291,7 +291,10 @@ async function printScreen(id) {
       mode,
       template: selected,
       api,
-      onProgress: (s) => (document.querySelector("#pdf-state").textContent = s),
+      onProgress: (s) => {
+        const state = document.querySelector("#pdf-state");
+        if (state) state.textContent = s;
+      },
       container: document.querySelector("#pdf-downloads"),
     });
   });

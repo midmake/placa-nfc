@@ -1,10 +1,27 @@
 # Arquivos necessários para concluir os PDFs comerciais
 
-O motor de PDF está implementado, mas os dois templates de produção continuam
-**desabilitados**. Nenhuma arte comercial foi inventada. A geometria usada nos testes
-é somente uma fixture técnica, não um modelo para enviar à gráfica.
+## Arte oficial azul integrada em 02/10/2026
 
-Envie **dois arquivos separados**, um para cada cor, com o mesmo layout:
+O primeiro template usa o PDF-base oficial fornecido pelo usuário, sem modificar a arte fixa.
+Corte: 100 × 100 mm; documento: 106 × 106 mm; sangria: 3 mm por lado.
+A referência mais recente é `placa-google-10x10-exemplo.pdf`, versão 1, atualizada às 15h15.
+O símbolo QR preto mede 21,8182 mm, centralizado em X=22,5 / Y=69,9 mm da área de corte;
+a caixa branca de proteção mede 26,8 mm. O tamanho do símbolo permanece constante independentemente
+da quantidade de módulos, preservando uma zona livre de pelo menos quatro módulos.
+O código individual confirmado pelo usuário (não o nome do lote) é centralizado abaixo,
+em preto, 6 pt, linha de base Y=85,7 mm. A posição e o QR seguem a última referência.
+
+Arquivo incorporado: `public/print-art/gear-go-oficial-azul.pdf`.
+Origem: `placa-google-10x10-base.pdf`, Library `libfile_6e01074dbffc8191a7a159166f877b21`.
+Referência: Library `libfile_0c9b50f913288191a21ec5e8e456fb55`, versão 1.
+
+O template azul está habilitado; a segunda cor continua **desabilitada** até receber
+arte aprovada. A exportação de produção continua exigindo domínio definitivo.
+Antes do lote comercial, aprove uma prova impressa e teste a câmera no material real.
+
+## Segunda cor (opcional para iniciar com azul)
+
+Para a segunda cor, envie a arte correspondente com a mesma geometria da oficial:
 
 1. Preferência: **PDF vetorial de uma página**, textos convertidos em curvas ou fontes
    incorporadas, na escala final. Sem QR e sem código fixos nos espaços variáveis.

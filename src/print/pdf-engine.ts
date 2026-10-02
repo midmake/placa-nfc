@@ -5,7 +5,7 @@ export type PrintLayout = {
   widthMm: number;
   heightMm: number;
   bleedMm: number;
-  qr: { xMm: number; yMm: number; sizeMm: number };
+  qr: { xMm: number; yMm: number; sizeMm: number; symbolSizeMm?: number };
   code: { xMm: number; yMm: number; widthMm: number; fontSizePt: number };
 };
 export type PrintTemplate = {
@@ -46,6 +46,13 @@ export function validateTemplate(template: PrintTemplate): PrintLayout {
     l.code.widthMm <= 0
   )
     throw new Error("Medidas de impressão inválidas.");
+  if (
+    l.qr.symbolSizeMm !== undefined &&
+    (!Number.isFinite(l.qr.symbolSizeMm) ||
+      l.qr.symbolSizeMm <= 0 ||
+      l.qr.symbolSizeMm >= l.qr.sizeMm)
+  )
+    throw new Error("Medida do símbolo QR inválida.");
   for (const area of [
     { x: l.qr.xMm, y: l.qr.yMm, w: l.qr.sizeMm, h: l.qr.sizeMm },
     {
@@ -128,7 +135,15 @@ export async function renderPrintPDF(
     const qr = QRCode.create(plate.url, { errorCorrectionLevel: "M" }),
       n = qr.modules.size,
       side = mm(l.qr.sizeMm),
-      unit = side / (n + 8);
+      unit =
+        l.qr.symbolSizeMm === undefined
+          ? side / (n + 8)
+          : mm(l.qr.symbolSizeMm) / n,
+      padding = (side - n * unit) / 2;
+    if (padding + 0.00001 < 4 * unit)
+      throw new Error(
+        "A área aprovada não comporta a margem livre de quatro módulos do QR.",
+      );
     if (unit < mm(0.35))
       throw new Error(
         "QR denso demais para esta área. Aumente o QR ou reduza o comprimento da origem.",
@@ -149,8 +164,8 @@ export async function renderPrintPDF(
           const start = col;
           while (col + 1 < n && qr.modules.get(row, col + 1)) col++;
           page.drawRectangle({
-            x: x + (start + 4) * unit,
-            y: y + (n - row + 3) * unit,
+            x: x + padding + start * unit,
+            y: y + padding + (n - row - 1) * unit,
             width: (col - start + 1) * unit,
             height: unit,
             color: cmyk(0, 0, 0, 1),

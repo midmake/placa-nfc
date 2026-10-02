@@ -1,15 +1,31 @@
 [
   {
     "id": "template-1",
-    "name": "Arte 1",
-    "ready": false,
-    "asset": null,
-    "layout": null,
+    "name": "Oficial azul",
+    "ready": true,
+    "asset": "/print-art/gear-go-oficial-azul.pdf",
+    "layout": {
+      "widthMm": 100,
+      "heightMm": 100,
+      "bleedMm": 3,
+      "qr": {
+        "xMm": 9.1,
+        "yMm": 56.5,
+        "sizeMm": 26.8,
+        "symbolSizeMm": 21.8181818182
+      },
+      "code": {
+        "xMm": 6.5,
+        "yMm": 83.5833333333,
+        "widthMm": 32,
+        "fontSizePt": 6
+      }
+    },
     "codeInk": "black"
   },
   {
     "id": "template-2",
-    "name": "Arte 2",
+    "name": "Segunda cor",
     "ready": false,
     "asset": null,
     "layout": null,

@@ -48,7 +48,7 @@ const plate = {
   code: "A3009-K7Q2",
   url: "https://qr.example.com/r/A00001-" + "a".repeat(48),
 };
-test("PDF final permanece bloqueado sem artes e posicionamento aprovados", async () => {
+test("arte oficial azul aprovada e segunda cor permanece pendente", async () => {
   const templates = JSON.parse(
     readFileSync(
       new URL("../public/print-templates.json", import.meta.url),
@@ -56,11 +56,29 @@ test("PDF final permanece bloqueado sem artes e posicionamento aprovados", async
     ),
   );
   assert.equal(templates.length, 2);
-  for (const t of templates) {
-    assert.equal(t.ready, false);
-    assert.equal(t.asset, null);
-    assert.throws(() => validateTemplate(t), /artes finais/);
-  }
+  assert.equal(templates[0].ready, true);
+  assert.equal(validateTemplate(templates[0]).qr.symbolSizeMm, 21.8181818182);
+  assert.equal(templates[1].ready, false);
+  assert.throws(() => validateTemplate(templates[1]), /artes finais/);
+});
+test("PDF com arte oficial preserva tamanho e gera QR real na área aprovada", async () => {
+  const official = JSON.parse(
+    readFileSync("public/print-templates.json", "utf8"),
+  )[0];
+  const art = readFileSync("public" + official.asset);
+  const bytes = await renderPrintPDF([plate], official, art, "production");
+  const doc = await PDFDocument.load(bytes);
+  assert.equal(doc.getPageCount(), 1);
+  assert.ok(Math.abs(doc.getPage(0).getWidth() - mm(106)) < 0.01);
+  assert.equal(doc.getPage(0).getTrimBox().width, mm(100));
+  mkdirSync("tmp/pdfs", { recursive: true });
+  writeFileSync("tmp/pdfs/official-calibration.pdf", bytes);
+  const tooLarge = structuredClone(official);
+  tooLarge.layout.qr.symbolSizeMm = 26;
+  await assert.rejects(
+    () => renderPrintPDF([plate], tooLarge, art, "production"),
+    /margem livre/,
+  );
 });
 test("PDF mantém milímetros, sangria, TrimBox, uma página por placa e QR vetorial", async () => {
   const bytes = await renderPrintPDF(

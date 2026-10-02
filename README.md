@@ -22,7 +22,7 @@ Não existe estoque de vendedor. A atribuição acontece atomicamente na conclus
 - Auditoria imutável com filtros por natureza, snapshots, autor e horário.
 - PWA standalone, ícones PNG/SVG, orientação iPhone; sem cache de dados/redirects.
 - CSV e dados paginados para PDF. Gerador PDF vetorial no navegador/Web Worker.
-- **PDF comercial pendente das duas artes aprovadas.** Não foi inventado layout final.
+- Arte oficial azul integrada (100 × 100 mm + sangria de 3 mm). Segunda cor pendente. PDF comercial exige domínio definitivo e confirmação da origem.
 - Produção exige origem definitiva configurada e confirmada; modo teste separado.
 
 ## ATENÇÃO: banco de produção inicializado manualmente
@@ -99,7 +99,7 @@ versionados e derivam do SVG original. `scripts/render-icons.mjs` é helper opci
 - `public/app.js`: login, usuários, edição e histórico.
 - `public/operations-ui.js`: painéis operacionais e ativação compartilhada.
 - `public/flow.js`: preserva somente identificador QR válido, nunca redirect externo.
-- `public/print-templates.json`: dois templates ainda desabilitados, aguardando artes.
+- `public/print-templates.json`: oficial azul habilitado e segunda cor aguardando arte.
 - `migrations/0002_operations.sql`: alteração aditiva, sem reconstruir tabela.
 - `docs/DEPLOY_V2.md`: procedimento exato de produção e limitações de rollback.
 - `docs/PRINT_ARTS.md`: arquivos/medidas/áreas necessários para concluir impressão.
@@ -150,7 +150,7 @@ Veja [o que enviar para concluir as artes](docs/PRINT_ARTS.md).
 A suíte usa handlers reais, SQLite com migrations e triggers, testes de fluxo DOM,
 manifest/ícones e PDF. Inclui concorrência, migração legada sem d1_migrations,
 1000 códigos e dados paginados, bloqueios, auditoria e isolamento. O teste de PDF
-usa **fixture técnica**, não arte comercial, e valida 1.000 páginas em quatro partes.
+valida a arte oficial e 1.000 páginas em quatro partes com uma fixture técnica.
 
 A aprovação de testes locais não substitui smoke test no D1 remoto, instalação real
 em iPhone/Android, CPU no plano Free e prova física da gráfica. Não há analytics,
