@@ -33,6 +33,20 @@ header {
   text-decoration: none;
   letter-spacing: -0.5px;
 }
+.brand .official-logo {
+  width: 180px;
+  height: auto;
+  background: white;
+  padding: 6px;
+  border-radius: 8px;
+}
+.login-intro > .official-logo {
+  width: min(100%, 420px);
+  height: auto;
+  background: white;
+  padding: 16px;
+  border-radius: 14px;
+}
 [hidden] {
   display: none !important;
 }
@@ -213,9 +227,9 @@ header {
   .login-intro {
     padding: 8px 4px;
   }
-  .login-intro > img {
-    width: 54px;
-    height: 54px;
+  .login-intro > .official-logo {
+    width: min(100%, 300px);
+    height: auto;
   }
   .login-intro h1 {
     font-size: 32px;
