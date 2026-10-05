@@ -1,0 +1,37 @@
+name: Diagnose ADMIN authentication configuration
+on:
+  push:
+    branches: [ops/admin-recovery-20261005]
+    paths: [.github/workflows/auth-diagnosis.yml]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    if: github.repository == 'midmake/placa-nfc'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect only binding metadata without secret values
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: python
+        run: |
+          import os,json,urllib.request
+          base="https://api.cloudflare.com/client/v4/accounts/"+os.environ["CLOUDFLARE_ACCOUNT_ID"]+"/workers/scripts/placa-nfc"
+          def get(path):
+           r=urllib.request.Request(base+path,headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"]})
+           with urllib.request.urlopen(r,timeout=45) as response: d=json.load(response)
+           assert d.get("success"), "Cloudflare API failed"
+           return d["result"]
+          s=get("/settings")
+          print("Current bindings:", [{"name":x.get("name"),"type":x.get("type")} for x in s.get("bindings",[])])
+          for b in s.get("bindings",[]):
+           if b.get("name")=="PASSWORD_PEPPER": print("Pepper plaintext length if available:",len(b["text"]) if "text" in b else "secret-redacted")
+          v=get("/versions")
+          for item in v.get("items",[])[:20]:
+           vid=item["id"]; version=get("/versions/"+vid)
+           bindings=version.get("resources",{}).get("bindings",[])
+           pepper=[b for b in bindings if b.get("name")=="PASSWORD_PEPPER"]
+           print("Version",vid,"created",item.get("metadata",{}).get("created_on"),"pepper", [{"type":b.get("type"),"length":len(b["text"]) if "text" in b else "redacted"} for b in pepper])
+          
