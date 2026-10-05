@@ -6,58 +6,7 @@ import worker, { type Env } from "../src/index";
 import { hashPassword } from "../src/security";
 // Real SQLite schema/constraints/transactions, exposing D1's small interface.
 // Wrangler runtime smoke tests are additionally documented in README.
-class TestDB {
-  sql = new DatabaseSync(":memory:");
-  constructor() {
-    this.sql.exec(
-      readFileSync(
-        new URL("../migrations/0001_initial.sql", import.meta.url),
-        "utf8",
-      ),
-    );
-  }
-  prepare(query: string) {
-    const db = this;
-    let params: any[] = [];
-    const p = {
-      bind(...args: any[]) {
-        params = args;
-        return p;
-      },
-      async first() {
-        return db.sql.prepare(query).get(...params) || null;
-      },
-      async all() {
-        return { results: db.sql.prepare(query).all(...params) };
-      },
-      async run() {
-        const r = db.sql.prepare(query).run(...params);
-        return { results: [], meta: { changes: Number(r.changes) } };
-      },
-      _exec() {
-        const stmt = db.sql.prepare(query);
-        return stmt.columns().length
-          ? { results: stmt.all(...params) }
-          : {
-              results: [],
-              meta: { changes: Number(stmt.run(...params).changes) },
-            };
-      },
-    };
-    return p;
-  }
-  async batch(stmts: any[]) {
-    this.sql.exec("BEGIN");
-    try {
-      const r = stmts.map((s) => s._exec());
-      this.sql.exec("COMMIT");
-      return r;
-    } catch (e) {
-      this.sql.exec("ROLLBACK");
-      throw e;
-    }
-  }
-}
+import { TestDB } from "./db";
 test("MVP completo: autenticação, autorização, lote, cadastro, múltiplas placas, histórico, reset", async () => {
   const db = new TestDB(),
     pepper = "test-pepper-only-never-deploy-".repeat(2);
@@ -172,23 +121,37 @@ test("MVP completo: autenticação, autorização, lote, cadastro, múltiplas pl
     })
   ).b;
   const batch = (
-    await call("/api/batches", "POST", { name: "Piloto", quantity: 50 })
+    await call("/api/batches", "POST", {
+      name: "Piloto",
+      quantity: 50,
+      request_key: crypto.randomUUID(),
+    })
   ).b;
   assert.ok(batch.id);
+  assert.equal(
+    (await call(`/api/batches/${batch.id}/generate`, "POST", {})).r.status,
+    200,
+  );
   assert.equal(db.sql.prepare("SELECT COUNT(*) n FROM plates").get()!.n, 50);
   assert.equal(
     (await call(`/api/batches/${batch.id}/assign`, "POST", { owner_id: u.id }))
       .r.status,
     200,
   );
-  const csv = await call(`/api/batches/${batch.id}/csv`);
+  const csv = await call(`/api/batches/${batch.id}/csv?mode=test`);
   assert.equal(csv.r.status, 200);
-  assert.match(csv.b, /A00001,https:\/\/test.invalid\/r\/A00001-[a-f0-9]{48}/);
+  assert.match(
+    csv.b,
+    /A\d{4}-[A-Z2-9]{4},https:\/\/test.invalid\/r\/A00001-[a-f0-9]{48}/,
+  );
   const all = (await call("/api/plates")).b.plates;
   const first = all.find((p: any) => p.code === "A00001"),
     second = all.find((p: any) => p.code === "A00002");
   const redirectPath = new URL(first.qr_url).pathname;
-  assert.match((await call(redirectPath)).b, /não foi ativada/);
+  assert.match(
+    (await call(redirectPath)).r.headers.get("location")!,
+    /activate=A00001-/,
+  );
   cookie = await login("gabriel@test.invalid", u.temporary_password);
   await call("/api/password", "POST", {
     current_password: u.temporary_password,
@@ -211,36 +174,42 @@ test("MVP completo: autenticação, autorização, lote, cadastro, múltiplas pl
     phone: "(51) 99999-1111",
     google_url: "https://search.google.com/local/writereview?placeid=abc",
   };
+  const grant1 = (
+    await call("/api/activation/verify", "POST", { code: first.physical_code })
+  ).b.grant;
+  const grant2 = (
+    await call("/api/activation/verify", "POST", { code: second.physical_code })
+  ).b.grant;
   assert.equal(
     (
-      await call(`/api/plates/${first.id}/activate`, "POST", {
+      await call("/api/activation/complete", "POST", {
         ...input,
+        grant: grant1,
         google_url: "https://evil.com",
       })
     ).r.status,
     400,
   );
-  const activated = await call(
-    `/api/plates/${first.id}/activate`,
-    "POST",
-    input,
-  );
+  const activated = await call("/api/activation/complete", "POST", {
+    ...input,
+    grant: grant1,
+  });
   assert.equal(activated.r.status, 200, JSON.stringify(activated.b));
   const eid = activated.b.establishment_id;
   assert.equal(
     (await call(redirectPath)).r.headers.get("location"),
     input.google_url,
   );
-  const duplicate = await call(
-    `/api/plates/${second.id}/activate`,
-    "POST",
-    input,
-  );
+  const duplicate = await call("/api/activation/complete", "POST", {
+    ...input,
+    grant: grant2,
+  });
   assert.equal(duplicate.r.status, 409);
   assert.equal(duplicate.b.matches.length, 1);
   assert.equal(
     (
-      await call(`/api/plates/${second.id}/activate`, "POST", {
+      await call("/api/activation/complete", "POST", {
+        grant: grant2,
         establishment_id: eid,
       })
     ).r.status,
@@ -290,7 +259,11 @@ test("MVP completo: autenticação, autorização, lote, cadastro, múltiplas pl
     404,
   );
   assert.equal(
-    (await call(`/api/plates/${first.id}/activate`, "POST", input)).r.status,
+    (
+      await call("/api/activation/verify", "POST", {
+        code: first.physical_code,
+      })
+    ).r.status,
     404,
   );
   cookie = adminCookie;
@@ -309,7 +282,7 @@ test("MVP completo: autenticação, autorização, lote, cadastro, múltiplas pl
   assert.equal(
     (await call(`/api/batches/${batch.id}/assign`, "POST", { owner_id: u2.id }))
       .r.status,
-    409,
+    200,
   );
   assert.equal(
     (await call(`/api/plates/${first.id}/assign`, "POST", { owner_id: u2.id }))
