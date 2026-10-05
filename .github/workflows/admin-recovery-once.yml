@@ -1,0 +1,56 @@
+name: Recover existing ADMIN access
+on:
+  push:
+    branches: [ops/admin-recovery-20261005]
+    paths: [.github/workflows/admin-recovery-once.yml]
+permissions:
+  contents: read
+concurrency:
+  group: placa-nfc-admin-recovery
+  cancel-in-progress: false
+jobs:
+  recover:
+    if: github.repository == 'midmake/placa-nfc' && github.ref == 'refs/heads/ops/admin-recovery-20261005'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Issue owner-authorized single-use recovery
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: python
+        run: |
+          import os, json, time, urllib.request
+          account=os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          token=os.environ["CLOUDFLARE_API_TOKEN"]
+          base=f"https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/bc6f8a86-9019-4fbb-ba3f-eaaf79d5378e"
+          def api(path="", body=None):
+              request=urllib.request.Request(base+path, data=json.dumps(body).encode() if body is not None else None, headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"})
+              try:
+                  with urllib.request.urlopen(request,timeout=60) as response: data=json.load(response)
+              except Exception:
+                  raise RuntimeError("Cloudflare access failed; response suppressed") from None
+              if data.get("success") is not True: raise RuntimeError("Cloudflare operation failed")
+              return data["result"]
+          def query(sql,params=[]):
+              result=api("/query",{"sql":sql,"params":params})
+              if not all(r.get("success") is True for r in result): raise RuntimeError("D1 operation failed")
+              return [row for r in result for row in r.get("results",[])]
+          assert api()["name"]=="placa-nfc"
+          users=query("SELECT id,role,state,archived_at FROM users WHERE email=? COLLATE NOCASE",["Rafael.mkieling@gmail.com"])
+          assert len(users)==1 and users[0]["role"]=="ADMIN" and users[0]["state"]=="ACTIVE" and users[0]["archived_at"] is None, "Expected active ADMIN not found"
+          uid=users[0]["id"]
+          assert not query("PRAGMA foreign_key_check"), "Integrity check failed"
+          rid="cae1ea08-997c-493a-8852-1550379a3296"
+          existing=query("SELECT id FROM access_tokens WHERE id=?",[rid])
+          assert not existing, "This recovery operation already ran; do not reuse it"
+          now=int(time.time()*1000)
+          expires=now+86400000
+          assert api("/time_travel/bookmark").get("bookmark"), "Recovery point unavailable"
+          query("UPDATE access_tokens SET revoked_at=? WHERE user_id=? AND kind='RESET' AND consumed_at IS NULL AND revoked_at IS NULL",[now,uid])
+          query("INSERT INTO access_tokens(id,user_id,kind,token_hash,expires_at,created_at,created_by,delivery) VALUES(?,?,'RESET',?,?,?,?, 'MANUAL')",[rid,uid,"e2293fb1d351f9a2c6a3551b5dd4067d1ee058fafa3f0baf9cbe03744507d3d6",expires,now,uid])
+          query("INSERT INTO audit_log(actor_id,entity_type,entity_id,action,new_data) VALUES(?,'user',?,'reset_requested',?)",[uid,uid,json.dumps({"token_id":rid,"expires_at":expires,"source":"owner_authorized_recovery","delivery":"MANUAL"})])
+          rows=query("SELECT expires_at,consumed_at,revoked_at FROM access_tokens WHERE id=? AND user_id=?",[rid,uid])
+          assert len(rows)==1 and rows[0]["expires_at"]==expires and rows[0]["consumed_at"] is None and rows[0]["revoked_at"] is None
+          print("ADMIN recovery ready; single use; validity 24 hours; account and password unchanged until acceptance.")
+          
