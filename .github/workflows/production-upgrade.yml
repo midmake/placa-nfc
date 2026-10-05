@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: midmake/placa-nfc
-          ref: 07255b6fc51106e987fc37cbb31ac24247da40ad
+          ref: 33b5f7baffd0d3e0665677c74be4e50764684c8e
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
