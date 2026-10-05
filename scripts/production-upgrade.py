@@ -10,9 +10,42 @@ def require(ok, message):
         raise RuntimeError(message)
 
 def schema(query):
-    return {(r['type'], r['name']): re.sub(r'\s+', ' ', r['sql']).strip().rstrip(';')
-            for r in query('SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL')
-            if not r['name'].startswith(('sqlite_', '_cf_')) and r['name'] != 'd1_migrations'}
+    def identifier(name):
+        return '"' + name.replace('"', '""') + '"'
+
+    def rows(values, fields):
+        return sorted((tuple(r[f] for f in fields) for r in values), key=repr)
+
+    # Ignore only known engine/runner bookkeeping, not arbitrary extra objects.
+    internal = {'sqlite_sequence', 'sqlite_stat1', 'sqlite_stat4', '_cf_KV', 'd1_migrations'}
+    objects = [r for r in query('SELECT type,name,tbl_name FROM sqlite_master')
+               if r['name'] not in internal and r['tbl_name'] not in internal
+               and not r['name'].startswith('sqlite_autoindex_')]
+    result = {(r['type'], r['name']): r['tbl_name'] for r in objects}
+    for obj in objects:
+        if obj['type'] != 'table':
+            continue
+        name = obj['name']
+        quoted = identifier(name)
+        columns = rows(query(f'PRAGMA table_xinfo({quoted})'),
+                       ('cid', 'name', 'type', 'notnull', 'dflt_value', 'pk', 'hidden'))
+        # FK ids reflect declaration order, not identity. Preserve composite order.
+        groups = {}
+        for fk in query(f'PRAGMA foreign_key_list({quoted})'):
+            groups.setdefault(fk['id'], []).append(fk)
+        foreign_keys = sorted((rows(group, ('seq', 'table', 'from', 'to',
+                                            'on_update', 'on_delete', 'match'))
+                               for group in groups.values()), key=repr)
+        indexes = []
+        for index in query(f'PRAGMA index_list({quoted})'):
+            # Implicit PK/UNIQUE names depend on serialization order; compare
+            # their full signatures. Explicit index names must match exactly.
+            index_name = index['name'] if index['origin'] == 'c' else None
+            details = rows(query(f'PRAGMA index_xinfo({identifier(index["name"])})'),
+                           ('seqno', 'cid', 'name', 'desc', 'coll', 'key'))
+            indexes.append((index_name, index['unique'], index['origin'], index['partial'], details))
+        result[('table', name)] = (columns, foreign_keys, sorted(indexes, key=repr))
+    return result
 
 def expected_states():
     db = sqlite3.connect(':memory:')
