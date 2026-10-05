@@ -17,21 +17,24 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: python
         run: |
-          import os,json,urllib.request
-          base="https://api.cloudflare.com/client/v4/accounts/"+os.environ["CLOUDFLARE_ACCOUNT_ID"]+"/workers/scripts/placa-nfc"
+          import os,json,urllib.request,urllib.error
+          root="https://api.cloudflare.com/client/v4"
+          headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"]}
           def get(path):
-           r=urllib.request.Request(base+path,headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"]})
-           with urllib.request.urlopen(r,timeout=45) as response: d=json.load(response)
-           assert d.get("success"), "Cloudflare API failed"
-           return d["result"]
-          s=get("/settings")
-          print("Current bindings:", [{"name":x.get("name"),"type":x.get("type")} for x in s.get("bindings",[])])
-          for b in s.get("bindings",[]):
-           if b.get("name")=="PASSWORD_PEPPER": print("Pepper plaintext length if available:",len(b["text"]) if "text" in b else "secret-redacted")
-          v=get("/versions?per_page=100")
-          for item in v.get("items",[]):
-           vid=item["id"]; version=get("/versions/"+vid)
-           bindings=version.get("resources",{}).get("bindings",[])
-           pepper=[b for b in bindings if b.get("name")=="PASSWORD_PEPPER"]
-           print("Version",vid,"created",item.get("metadata",{}).get("created_on"),"pepper", [{"type":b.get("type"),"length":len(b["text"]) if "text" in b else "redacted"} for b in pepper])
+           try:
+            with urllib.request.urlopen(urllib.request.Request(root+path,headers=headers),timeout=30) as r: d=json.load(r)
+            if not d.get("success"): print("ACCESS_DENIED",path.split("?")[0]); return None
+            return d["result"]
+           except urllib.error.HTTPError as e:
+            print("ACCESS_DENIED",e.code,path.split("?")[0]); return None
+          account=os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          settings=get("/accounts/"+account+"/workers/scripts/placa-nfc/settings")
+          if settings:
+           b=settings.get("bindings",[])
+           print("EMAIL_CONFIGURATION",{"api_key_present":any(x["name"]=="RESEND_API_KEY" for x in b),"from_configured":any(x["name"]=="EMAIL_FROM" for x in b),"reply_to_configured":any(x["name"]=="EMAIL_REPLY_TO" for x in b)})
+           print("PRINT_CONFIGURATION",[{k:x.get(k) for k in ("name","type","text")} for x in b if x.get("name") in ["PUBLIC_BASE_URL","QR_PRODUCTION_READY"]])
+          zones=get("/zones?name=geargo.com.br")
+          if zones: print("TARGET_ZONE",[{k:z.get(k) for k in ("id","name","status")} for z in zones if z.get("name")=="geargo.com.br"])
+          domains=get("/accounts/"+account+"/workers/domains")
+          if domains: print("TARGET_DOMAIN",[d for d in domains if d.get("hostname")=="app.geargo.com.br"])
           
