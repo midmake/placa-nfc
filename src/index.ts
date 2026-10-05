@@ -354,9 +354,19 @@ export default {
           : new Response(e.message, { status: e.status });
       else {
         const requestId = crypto.randomUUID();
+        // Only fixed categories leave the server; never emit exception messages.
+        const detail = String(e);
+        const errorCode = detail.includes("PASSWORD_PEPPER")
+          ? "AUTH_CONFIGURATION"
+          : /D1_|D1_ERROR|SQLITE|no such (table|column)/i.test(detail)
+            ? "DATABASE_OPERATION"
+            : /PBKDF2|deriveBits|iterations|NotSupportedError/i.test(detail)
+              ? "PASSWORD_DERIVATION"
+              : "INTERNAL_OPERATION";
         console.error(
           JSON.stringify({
             event: "request_failed",
+            error_code: errorCode,
             request_id: requestId,
             method: req.method,
           }),
@@ -365,6 +375,7 @@ export default {
           {
             error: "Não foi possível concluir. Tente novamente.",
             request_id: requestId,
+            error_code: errorCode,
           },
           500,
         );
