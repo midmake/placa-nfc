@@ -16,6 +16,13 @@ export class TestDB {
           "utf8",
         ),
       );
+    if (upgrade)
+      this.sql.exec(
+        readFileSync(
+          new URL("../migrations/0003_professional_users.sql", import.meta.url),
+          "utf8",
+        ),
+      );
   }
 
   prepare(query: string) {

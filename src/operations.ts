@@ -24,6 +24,7 @@ import {
   validQrKey,
 } from "./physical-code";
 import { parseGoogleURL } from "./google-url";
+import { allocationFor } from "./professional";
 
 const ACTIVATION_ERROR =
   "Não foi possível validar esta placa. Confira o código ou fale com o administrador.";
@@ -103,6 +104,7 @@ async function verifiedGrant(
 async function finishActivation(req: Request, env: Env, user: User, b: Row) {
   const db = env.DB,
     p = await verifiedGrant(req, env, user, b.grant);
+  const { batch, allocation } = await allocationFor(db, user, p);
   let eid: string;
   const stmts: D1PreparedStatement[] = [];
   if (b.establishment_id) {
@@ -112,16 +114,22 @@ async function finishActivation(req: Request, env: Env, user: User, b: Row) {
       user,
     );
     if (e.owner_id !== user.id) fail(404, ACTIVATION_ERROR);
+    if (e.archived_at || e.is_test !== batch.is_test)
+      fail(
+        409,
+        "Escolha um cliente não arquivado da mesma finalidade: teste ou real.",
+      );
     eid = e.id;
   } else {
     const input = await establishmentInput(b, env);
     const matches = (
       await db
         .prepare(
-          "SELECT id,name,city,phone FROM establishments WHERE owner_id=? AND (phone_normalized=? OR google_url=? OR (name_key=? AND city_key=?)) LIMIT 20",
+          "SELECT id,name,city,phone FROM establishments WHERE owner_id=? AND archived_at IS NULL AND is_test=? AND (phone_normalized=? OR google_url=? OR (name_key=? AND city_key=?)) LIMIT 20",
         )
         .bind(
           user.id,
+          batch.is_test,
           input.phone_normalized,
           input.google_url,
           input.name_key,
@@ -142,7 +150,7 @@ async function finishActivation(req: Request, env: Env, user: User, b: Row) {
     stmts.push(
       db
         .prepare(
-          "INSERT INTO establishments(id,owner_id,name,city,segment,responsible,phone,phone_normalized,google_url,name_key,city_key,initial_snapshot,created_by,address) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO establishments(id,owner_id,name,city,segment,responsible,phone,phone_normalized,google_url,name_key,city_key,initial_snapshot,created_by,address,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(
           eid,
@@ -159,10 +167,25 @@ async function finishActivation(req: Request, env: Env, user: User, b: Row) {
           JSON.stringify(input),
           user.id,
           input.address,
+          batch.is_test,
         ),
       audit(db, user, "establishment", eid, "created", null, input),
     );
   }
+  if (allocation)
+    stmts.push(
+      db
+        .prepare(
+          "UPDATE allocations SET consumed=consumed+1 WHERE id=? AND user_id=? AND batch_id=? AND consumed<quantity",
+        )
+        .bind(allocation.id, user.id, p.batch_id),
+      guard(db),
+      audit(db, user, "allocation", allocation.id, "unit_consumed", null, {
+        plate_id: p.id,
+        user_id: user.id,
+        batch_id: p.batch_id,
+      }),
+    );
   // Delete consumes the one-use proof inside the SAME transaction as the claim.
   stmts.push(
     db
@@ -173,9 +196,18 @@ async function finishActivation(req: Request, env: Env, user: User, b: Row) {
     guard(db),
     db
       .prepare(
-        "UPDATE plates SET owner_id=?,establishment_id=?,status='ACTIVE',activated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND blocked=0 AND status<>'ACTIVE' AND owner_id IS ? AND (owner_id IS NULL OR owner_id=?)",
+        "UPDATE plates SET owner_id=?,establishment_id=?,activated_by=?,activation_type=?,allocation_id=?,status='ACTIVE',activated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND blocked=0 AND status<>'ACTIVE' AND owner_id IS ? AND (owner_id IS NULL OR owner_id=?)",
       )
-      .bind(user.id, eid, p.id, p.owner_id, user.id),
+      .bind(
+        user.id,
+        eid,
+        user.id,
+        user.commercial_type || "EQUIPE_GEAR",
+        allocation?.id || null,
+        p.id,
+        p.owner_id,
+        user.id,
+      ),
     guard(db),
     audit(
       db,
@@ -189,6 +221,10 @@ async function finishActivation(req: Request, env: Env, user: User, b: Row) {
         owner_id: user.id,
         status: "ACTIVE",
         establishment_id: eid,
+        commercial_type: user.commercial_type || "EQUIPE_GEAR",
+        allocation_id: allocation?.id || null,
+        product: batch.product,
+        is_test: !!batch.is_test,
       },
     ),
   );
@@ -215,6 +251,11 @@ async function batchById(db: D1Database, id: string) {
     .bind(id)
     .first<Row>();
   if (!b) fail(404, "Lote não encontrado.");
+  if (b.archived_at)
+    fail(
+      409,
+      "Lote arquivado. Seus QRs ativos e histórico permanecem preservados.",
+    );
   return b;
 }
 async function generateStep(env: Env, user: User, id: string) {
@@ -359,6 +400,8 @@ async function exportInfo(req: Request, env: Env, id: string) {
     fail(400, "Selecione explicitamente teste ou produção.");
   let origin = baseURL(req, env);
   if (mode === "production") {
+    if (b.is_test)
+      fail(409, "Lotes de teste não podem ser exportados para produção.");
     origin = definitiveOrigin(req, env);
     if (b.production_origin !== origin)
       fail(409, "Confirme a origem definitiva deste lote antes de exportar.");
@@ -382,12 +425,13 @@ export async function operations(
       fail(404, ACTIVATION_ERROR);
     const p = await db
       .prepare(
-        "SELECT id,code,token,physical_code FROM plates WHERE physical_code=? AND blocked=0 AND status<>'ACTIVE' AND (owner_id IS NULL OR owner_id=?)",
+        "SELECT id,code,token,physical_code,batch_id,owner_id FROM plates WHERE physical_code=? AND blocked=0 AND status<>'ACTIVE' AND (owner_id IS NULL OR owner_id=?)",
       )
       .bind(code, user.id)
       .first<Row>();
     if (!p || (b.qr !== undefined && `${p.code}-${p.token}` !== b.qr))
       fail(404, ACTIVATION_ERROR);
+    const eligibility = await allocationFor(db, user, p);
     const grant = randomToken();
     await db.batch([
       db
@@ -405,7 +449,12 @@ export async function operations(
           Date.now() + 900000,
         ),
     ]);
-    return json({ grant, code: p.physical_code, expires_in: 900 });
+    return json({
+      grant,
+      code: p.physical_code,
+      expires_in: 900,
+      is_test: !!eligibility.batch.is_test,
+    });
   }
   if (path === "/api/activation/complete" && method === "POST")
     return finishActivation(req, env, user, await body(req));
@@ -433,16 +482,24 @@ export async function operations(
       quantity = Number(b.quantity),
       name = text(b.name, "Nome do lote", 100),
       requestKey = text(b.request_key, "Identificador da operação", 80);
+    if (b.product !== undefined && b.product !== "GOOGLE")
+      fail(400, "Somente Google Reviews está disponível.");
+    if (b.is_test !== undefined && typeof b.is_test !== "boolean")
+      fail(400, "Finalidade de teste inválida.");
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 5000)
       fail(400, "Gere entre 1 e 5.000 placas por lote.");
     const existing = await db
       .prepare(
-        "SELECT id,name,target_quantity FROM batches WHERE request_key=?",
+        "SELECT id,name,target_quantity,is_test FROM batches WHERE request_key=?",
       )
       .bind(requestKey)
       .first<Row>();
     if (existing) {
-      if (existing.name !== name || existing.target_quantity !== quantity)
+      if (
+        existing.name !== name ||
+        existing.target_quantity !== quantity ||
+        existing.is_test !== (b.is_test ? 1 : 0)
+      )
         fail(409, "Operação já usada para outro lote.");
       return json({ id: existing.id, quantity, complete: false });
     }
@@ -450,12 +507,22 @@ export async function operations(
     await mutate(db, [
       db
         .prepare(
-          "INSERT INTO batches(id,name,created_by,physical_prefix,target_quantity,generation_state,request_key) VALUES(?,?,?,?,?,'GENERATING',?)",
+          "INSERT INTO batches(id,name,created_by,physical_prefix,target_quantity,generation_state,request_key,is_test) VALUES(?,?,?,?,?,'GENERATING',?,?)",
         )
-        .bind(id, name, user.id, lotPrefix(), quantity, requestKey),
+        .bind(
+          id,
+          name,
+          user.id,
+          lotPrefix(),
+          quantity,
+          requestKey,
+          b.is_test ? 1 : 0,
+        ),
       audit(db, user, "batch", id, "created", null, {
         name,
         target_quantity: quantity,
+        is_test: !!b.is_test,
+        product: "GOOGLE",
       }),
     ]);
     return json({ id, quantity, complete: false }, 201);
@@ -644,23 +711,32 @@ export async function operations(
     const b = await body(req),
       owner = text(b.owner_id, "Vendedor");
     if (
-      !(await db.prepare("SELECT id FROM users WHERE id=?").bind(owner).first())
+      !(await db
+        .prepare(
+          "SELECT id FROM users WHERE id=? AND commercial_type='EQUIPE_GEAR' AND state='ACTIVE' AND archived_at IS NULL",
+        )
+        .bind(owner)
+        .first())
     )
-      fail(400, "Vendedor inválido.");
+      fail(
+        400,
+        "Selecione uma pessoa ativa da Equipe Gear. Para revendedor, use Atribuir unidades.",
+      );
     // Batch assignment is explicitly administrative and touches only never-activated plates.
     const column = m[1] === "plates" ? "id" : "batch_id",
       target = m[2];
     if (m[1] === "plates") {
       const p = await db
-        .prepare("SELECT status FROM plates WHERE id=?")
+        .prepare("SELECT status,batch_id FROM plates WHERE id=?")
         .bind(target)
         .first<Row>();
       if (!p) fail(404, "Placa não encontrada.");
+      await batchById(db, p.batch_id);
       if (p.status === "ACTIVE")
         fail(409, "Não é possível transferir uma placa ativa.");
     } else await batchById(db, target);
     const where = `${column}=? AND status<>'ACTIVE' AND owner_id IS NOT ?`;
-    const result = await db.batch([
+    const result = await mutate(db, [
       db
         .prepare(
           `INSERT INTO audit_log(actor_id,entity_type,entity_id,action,old_data,new_data) SELECT ?,'plate',CAST(id AS TEXT),'assigned',json_object('owner_id',owner_id),json_object('owner_id',?) FROM plates WHERE ${where}`,
@@ -690,6 +766,7 @@ export async function operations(
       establishments: "a.entity_type='establishment'",
       changes: "a.entity_type='establishment' AND a.action='updated'",
       blocks: "a.action IN ('blocked','unblocked')",
+      allocations: "a.entity_type='allocation'",
     };
     const category = url.searchParams.get("category") || "all";
     if (category !== "all" && !categories[category])

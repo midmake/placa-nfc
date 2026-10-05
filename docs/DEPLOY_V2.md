@@ -1,5 +1,7 @@
 # Atualização segura da produção — Gear Go Digital
 
+> Para a branch atual, siga [DEPLOY_FINAL.md](DEPLOY_FINAL.md): após 0002 é necessário aplicar e validar 0003 antes do deploy. Este arquivo mantém os detalhes da migration V2.
+
 Repositório autorizado: **midmake/placa-nfc**. Branch desta rodada: `feat/operacao-placas-v2`.
 
 ## Ordem obrigatória

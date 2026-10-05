@@ -11,6 +11,8 @@ async function settle() {
 async function ui({
   logged = false,
   temporary = false,
+  role = "USER",
+  commercial_type = "EQUIPE_GEAR",
   url = "https://test.invalid/?activate=" + qr,
 } = {}) {
   const dom = new JSDOM(source("index.html"), {
@@ -22,6 +24,8 @@ async function ui({
   let signed = logged,
     needsChange = temporary;
   const requests: any[] = [];
+  w.confirm = () => true;
+  w.HTMLElement.prototype.scrollIntoView = () => {};
   w.fetch = async (path: string, opts: any = {}) => {
     const b = opts.body ? JSON.parse(opts.body) : null;
     requests.push({ path, method: opts.method, b });
@@ -32,7 +36,8 @@ async function ui({
         response = {
           id: "u",
           name: "Gabriel",
-          role: "USER",
+          role,
+          commercial_type,
           must_change_password: Number(needsChange),
         };
       else {
@@ -45,7 +50,8 @@ async function ui({
       response = {
         id: "u",
         name: "Gabriel",
-        role: "USER",
+        role,
+        commercial_type,
         must_change_password: Number(needsChange),
       };
     }
@@ -55,12 +61,48 @@ async function ui({
       response = { ok: true };
     }
     if (path === "/api/categories") response = [{ name: "Barbearia" }];
+    if (path === "/api/dashboard")
+      response = {
+        counts: {
+          active: 7,
+          inactive: 13,
+          blocked: 0,
+          team: 1,
+          resellers: 1,
+          invitations: 0,
+          month_activations: 7,
+        },
+        recent: [],
+        batches: [],
+      };
+    if (path === "/api/products")
+      response = [
+        { name: "Google Reviews", state: "ACTIVE" },
+        { name: "Instagram", state: "COMING_SOON" },
+        { name: "Pix", state: "COMING_SOON" },
+      ];
+    if (path.startsWith("/api/people?"))
+      response = { users: [], next_offset: null, email_ready: false };
+    if (path === "/api/invitations")
+      response = {
+        link: "https://test.invalid/convite/private-token",
+        delivery: "MANUAL",
+        expires_at: Date.now() + 172800000,
+      };
+    if (path.startsWith("/api/allocations?") || path === "/api/allocations")
+      response = [
+        { batch_name: "Lote", quantity: 20, consumed: 7, available: 13 },
+      ];
     if (path.startsWith("/api/establishments")) response = [];
     if (path === "/api/activation/verify")
       response = { grant: "b".repeat(64), code: "A3009-K7Q2" };
     return { ok: status < 400, status, json: async () => response };
   };
-  w.eval(["flow.js", "operations-ui.js", "app.js"].map(source).join("\n"));
+  w.eval(
+    ["flow.js", "operations-ui.js", "professional-ui.js", "app.js"]
+      .map(source)
+      .join("\n"),
+  );
   await settle();
   function submit(selector: string, values: Record<string, string>) {
     const form = w.document.querySelector(selector);
@@ -73,6 +115,66 @@ async function ui({
   }
   return { w, dom, requests, submit };
 }
+test("dashboard ADMIN, produtos secundários e convite com entrega manual", async () => {
+  const { w, dom, requests, submit } = await ui({
+    logged: true,
+    role: "ADMIN",
+    url: "https://test.invalid/",
+  });
+  assert.match(w.document.body.textContent, /Visão geral/);
+  assert.match(w.document.body.textContent, /Instagram — Em breve/);
+  w.document.querySelector('[data-page="users"]').click();
+  await settle();
+  submit("#invite-user", {
+    name: "João",
+    email: "joao@test.invalid",
+    commercial_type: "REVENDEDOR",
+  });
+  await settle();
+  assert.equal(
+    requests.find((r) => r.path === "/api/invitations").b.commercial_type,
+    "REVENDEDOR",
+  );
+  assert.ok(w.document.querySelector("#private-access-link"));
+  assert.match(w.document.body.textContent, /Entrega manual disponível/);
+  dom.window.close();
+});
+test("revendedor vê saldo sem estoque de IDs", async () => {
+  const { w, dom } = await ui({
+    logged: true,
+    commercial_type: "REVENDEDOR",
+    url: "https://test.invalid/",
+  });
+  w.document.querySelector('[data-page="balance"]').click();
+  await settle();
+  assert.match(w.document.body.textContent, /Compradas 20/);
+  assert.match(w.document.body.textContent, /Disponíveis 13/);
+  assert.ok(w.document.querySelector("#balance-activate"));
+  assert.ok(!w.document.querySelector('[data-page="users"]'));
+  dom.window.close();
+});
+test("convite e recuperação mantêm token apenas no formulário e voltam ao login", async () => {
+  for (const route of ["convite", "redefinir"]) {
+    const token = "a".repeat(64);
+    const { w, dom, requests, submit } = await ui({
+      url: `https://test.invalid/${route}/${token}`,
+    });
+    assert.equal(w.location.pathname, "/");
+    assert.ok(!requests.some((r) => r.path === "/api/me"));
+    submit("#accept-access", {
+      password: "new-password-123",
+      confirmation: "new-password-123",
+    });
+    await settle();
+    assert.equal(
+      requests.find((r) => r.path === "/api/access/accept").b.token,
+      token,
+    );
+    assert.ok(w.document.querySelector("#login"));
+    assert.ok(!w.document.body.innerHTML.includes(token));
+    dom.window.close();
+  }
+});
 test("QR → login → retorno automático → código → formulário compartilhado", async () => {
   const { w, dom, requests, submit } = await ui();
   assert.match(w.document.querySelector("h2").textContent, /Entre para ativar/);

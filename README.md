@@ -29,8 +29,8 @@ Não existe estoque de vendedor. A atribuição acontece atomicamente na conclus
 
 **Não reaplique a migration 0001 em produção. Não apague/recrie tabelas ou banco.**
 
-Leia [docs/DEPLOY_V2.md](docs/DEPLOY_V2.md). A ordem é:
-backup → pré-verificação → somente `0002_operations.sql` → conferir → merge/deploy.
+Leia [docs/DEPLOY_FINAL.md](docs/DEPLOY_FINAL.md). A ordem é:
+backup → pré-verificação → `0002_operations.sql` → validar → `0003_professional_users.sql` → validar → merge/deploy autorizado.
 
 A branch `feat/operacao-placas-v2` deve ser mesclada em main apenas depois da migration.
 O deploy automático atual continua com `npm run build` / `npm run deploy`.
@@ -50,7 +50,7 @@ npm run dev
 ```
 
 `db:local` serve para base local nova gerenciada pelo Wrangler. Se uma base local já
-tiver o schema inicial aplicado manualmente, use `npm run db:v2:local`.
+tiver o schema inicial aplicado manualmente, use `npm run db:v2:local` seguido de `npm run db:v3:local`.
 
 Crie `.dev.vars` ignorado pelo Git, com pepper aleatório exclusivo de desenvolvimento:
 
@@ -71,7 +71,21 @@ unset GG_ADMIN_PASSWORD
 
 A troca de senha é obrigatória. Produção já possui admin: não execute bootstrap lá.
 
-## Comandos
+## Usuários profissionais e operação
+
+Role ADMIN/USER preservada, tipo comercial EQUIPE_GEAR/REVENDEDOR separado e estados
+INVITED/ACTIVE/SUSPENDED. Equipe não tem estoque; revendedor recebe unidades por lote,
+com reserva de capacidade e consumo transacional na ativação. Convites de 48h e
+recuperação de 30min usam hash de token, expiração, uso único e revogação de sessões.
+Integração Resend pronta; sem credenciais, ADMIN compartilha link pessoal para testes.
+Dashboard, busca paginada, rastreabilidade, suspensão e arquivamento disponíveis.
+Exclusão restrita a dados de teste, com senha atual ADMIN e confirmação digitada.
+GOOGLE é o produto atual; Instagram/Pix aparecem apenas como “Em breve”.
+
+Domínio não bloqueia testes na origem workers.dev. Instruções de e-mail, migrations,
+observabilidade e checklist completo estão em [DEPLOY_FINAL](docs/DEPLOY_FINAL.md).
+
+### Comandos de validação
 
 ```sh
 npm test
@@ -80,6 +94,8 @@ npm run build
 npm run dev
 npm run db:remote        # Somente pré-verificação remota, não aplica migrations
 npm run db:v2:remote     # Aplica apenas V2 após pré-verificação; faça backup antes
+npm run db:v3:check      # Pré-verificação 0003, somente leitura
+npm run db:v3:remote     # Somente após validar 0002 e autorizar a atualização
 npm run deploy          # Publicação manual quando autorizada, após migration
 ```
 

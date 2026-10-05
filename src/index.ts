@@ -7,6 +7,7 @@ import {
 } from "./security";
 import { parseGoogleURL } from "./google-url";
 import { operations, redirectPlate } from "./operations";
+import { professional, publicAccounts } from "./professional";
 import {
   type Env,
   type User,
@@ -32,13 +33,23 @@ import {
 } from "./core";
 export type { Env } from "./core";
 export { normalizePhone } from "./core";
-async function route(req: Request, env: Env): Promise<Response> {
+async function route(
+  req: Request,
+  env: Env,
+  ctx?: ExecutionContext,
+): Promise<Response> {
   const { DB: db } = env;
   const url = new URL(req.url),
     path = url.pathname,
     method = req.method;
   if (path.startsWith("/r/") && (method === "GET" || method === "HEAD"))
     return redirectPlate(req, env);
+  if (/^\/(convite|redefinir)\/[^/]+$/.test(path)) {
+    const asset = new URL(req.url);
+    asset.pathname = "/";
+    asset.search = "";
+    return env.ASSETS.fetch(new Request(asset, { method: "GET" }));
+  }
   if (!path.startsWith("/api/")) return env.ASSETS.fetch(req);
   if (!["GET", "HEAD"].includes(method)) {
     if (req.headers.get("origin") !== url.origin)
@@ -46,6 +57,8 @@ async function route(req: Request, env: Env): Promise<Response> {
     if (req.headers.get("sec-fetch-site") === "cross-site")
       fail(403, "Origem inválida.");
   }
+  const publicAccount = await publicAccounts(req, env, ctx);
+  if (publicAccount) return publicAccount;
   if (path === "/api/login" && method === "POST") {
     const b = await body(req);
     const email = text(b.email, "E-mail", 254).toLowerCase();
@@ -60,22 +73,25 @@ async function route(req: Request, env: Env): Promise<Response> {
       ? await verifyPassword(password, u.password_hash!, env.PASSWORD_PEPPER)
       : (await hashPassword(password, env.PASSWORD_PEPPER, "0".repeat(32)),
         false);
-    if (!u || !valid) fail(401, "E-mail ou senha inválidos.");
+    if (!u || !valid || u.state !== "ACTIVE" || u.archived_at)
+      fail(401, "E-mail ou senha inválidos.");
     const token = randomToken();
     const now = Date.now();
     await db.batch([
       db.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),
       db
         .prepare(
-          "INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)",
+          "INSERT INTO sessions(token_hash,user_id,expires_at,created_at) SELECT ?,id,?,? FROM users WHERE id=? AND state='ACTIVE' AND archived_at IS NULL",
         )
-        .bind(await digest(token), u.id, now + 43200000, now),
+        .bind(await digest(token), now + 43200000, now, u.id),
     ]);
     const res = json({
       id: u.id,
       name: u.name,
       role: u.role,
       must_change_password: u.must_change_password,
+      commercial_type: u.commercial_type,
+      state: u.state,
     });
     res.headers.set("Set-Cookie", sessionCookie(token, req, 43200));
     return res;
@@ -122,6 +138,11 @@ async function route(req: Request, env: Env): Promise<Response> {
         ),
       guard(db),
       db.prepare("DELETE FROM sessions WHERE user_id=?").bind(user.id),
+      db
+        .prepare(
+          "UPDATE access_tokens SET revoked_at=? WHERE user_id=? AND consumed_at IS NULL AND revoked_at IS NULL",
+        )
+        .bind(Date.now(), user.id),
       audit(db, user, "user", user.id, "password_changed", null, {
         sessions_revoked: true,
       }),
@@ -132,6 +153,8 @@ async function route(req: Request, env: Env): Promise<Response> {
   }
   if (user.must_change_password)
     fail(403, "Troque sua senha temporária antes de continuar.");
+  const pro = await professional(req, env, user);
+  if (pro) return pro;
   const operational = await operations(req, env, user);
   if (operational) return operational;
   if (path === "/api/categories" && method === "GET")
@@ -155,7 +178,7 @@ async function route(req: Request, env: Env): Promise<Response> {
       (
         await db
           .prepare(
-            "SELECT id,name,email,role,must_change_password,created_at FROM users ORDER BY name",
+            "SELECT id,name,email,role,must_change_password,created_at,commercial_type,state,archived_at FROM users ORDER BY name",
           )
           .all()
       ).results,
@@ -208,6 +231,11 @@ async function route(req: Request, env: Env): Promise<Response> {
         )
         .bind(await hashPassword(password, env.PASSWORD_PEPPER), id),
       db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
+      db
+        .prepare(
+          "UPDATE access_tokens SET revoked_at=? WHERE user_id=? AND consumed_at IS NULL AND revoked_at IS NULL",
+        )
+        .bind(Date.now(), id),
       audit(db, user, "user", id, "password_reset", null, {
         sessions_revoked: true,
       }),
@@ -216,6 +244,8 @@ async function route(req: Request, env: Env): Promise<Response> {
   }
   if (path === "/api/establishments" && method === "GET") {
     const clauses = user.role === "ADMIN" ? ["1=1"] : ["e.owner_id=?"];
+    if (url.searchParams.get("archived") !== "true" || user.role !== "ADMIN")
+      clauses.push("e.archived_at IS NULL");
     const args: unknown[] = user.role === "ADMIN" ? [] : [user.id];
     for (const field of ["city", "segment"]) {
       const v = url.searchParams.get(field);
@@ -252,7 +282,7 @@ async function route(req: Request, env: Env): Promise<Response> {
     const plates = (
       await db
         .prepare(
-          "SELECT id,code,physical_code,blocked,status,token FROM plates WHERE establishment_id=? ORDER BY id",
+          "SELECT p.id,p.code,p.physical_code,p.blocked,p.status,p.token,b.name AS batch_name,p.establishment_id FROM plates p JOIN batches b ON b.id=p.batch_id WHERE establishment_id=? ORDER BY p.id",
         )
         .bind(e.id)
         .all<Row>()
@@ -309,19 +339,33 @@ async function route(req: Request, env: Env): Promise<Response> {
   return fail(404, "Operação não encontrada.");
 }
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(
+    req: Request,
+    env: Env,
+    ctx?: ExecutionContext,
+  ): Promise<Response> {
     let res: Response;
     try {
-      res = await route(req, env);
+      res = await route(req, env, ctx);
     } catch (e) {
       if (e instanceof HttpError)
         res = req.url.includes("/api/")
           ? json({ error: e.message }, e.status)
           : new Response(e.message, { status: e.status });
       else {
-        console.error("Request failed", e instanceof Error ? e.name : "Error");
+        const requestId = crypto.randomUUID();
+        console.error(
+          JSON.stringify({
+            event: "request_failed",
+            request_id: requestId,
+            method: req.method,
+          }),
+        );
         res = json(
-          { error: "Não foi possível concluir. Tente novamente." },
+          {
+            error: "Não foi possível concluir. Tente novamente.",
+            request_id: requestId,
+          },
           500,
         );
       }

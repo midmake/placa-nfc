@@ -69,15 +69,25 @@ function menu() {
     me && !me.must_change_password
       ? [
           ...(me.role === "ADMIN"
-            ? ["batches", "plates", "establishments", "users", "audit"]
-            : ["establishments"]),
+            ? [
+                "dashboard",
+                "batches",
+                "plates",
+                "establishments",
+                "users",
+                "audit",
+              ]
+            : [
+                "establishments",
+                ...(me.commercial_type === "REVENDEDOR" ? ["balance"] : []),
+              ]),
           "activate",
           "password",
           "logout",
         ]
           .map(
             (p) =>
-              `<button data-page="${p}" class="${p === page ? "selected" : ""}">${{ plates: "Placas por vendedor", establishments: me.role === "ADMIN" ? "Estabelecimentos" : "Meus clientes", batches: "Lotes", activate: "Ativar placa", users: "Usuários", audit: "Histórico", password: "Senha", logout: "Sair" }[p]}</button>`,
+              `<button data-page="${p}" class="${p === page ? "selected" : ""}">${{ dashboard: "Visão geral", balance: "Meu saldo", plates: "Placas por vendedor", establishments: me.role === "ADMIN" ? "Estabelecimentos" : "Meus clientes", batches: "Lotes", activate: "Ativar placa", users: "Usuários", audit: "Histórico", password: "Senha", logout: "Sair" }[p]}</button>`,
           )
           .join("")
       : "";
@@ -102,11 +112,13 @@ async function go(p) {
     return;
   }
   await {
+    dashboard,
+    balance: balances,
     plates,
     establishments,
     batches,
     userList,
-    users: userList,
+    users: people,
     audit,
     activate: activationCode,
     password: passwordForm,
@@ -115,7 +127,8 @@ async function go(p) {
 function login() {
   document.body.classList.add("login-view");
   nav.innerHTML = "";
-  app.innerHTML = `<div class="login-layout"><section class="login-intro"><img class="official-logo" src="/gear-go-oficial.jpg" width="1536" height="512" alt="Gear Go Digital"><p class="eyebrow">GEAR GO DIGITAL</p><h1>Conexões reais.<br>Gestão simples.</h1><p>Suas placas, seus clientes.<br>Tudo no mesmo lugar.</p><div class="signal-line" aria-hidden="true"></div><small>Acesso exclusivo da equipe</small></section><section class="panel login-panel"><h2>${pendingQR() ? "Entre para ativar sua placa" : "Bem-vindo de volta"}</h2><p class="muted">${pendingQR() ? "Depois do login, confirme o código impresso na placa." : "Acesse sua operação Gear Go Digital."}</p><form id="login"><label>E-mail<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Senha<input type="password" name="password" autocomplete="current-password" required maxlength="128"></label><button class="full">Entrar</button></form><p class="hint">Não há cadastro público. Solicite seu acesso ao administrador.</p></section></div>`;
+  app.innerHTML = `<div class="login-layout"><section class="login-intro"><img class="official-logo" src="/gear-go-oficial.jpg" width="1536" height="512" alt="Gear Go Digital"><p class="eyebrow">GEAR GO DIGITAL</p><h1>Conexões reais.<br>Gestão simples.</h1><p>Suas placas, seus clientes.<br>Tudo no mesmo lugar.</p><div class="signal-line" aria-hidden="true"></div><small>Acesso exclusivo da equipe</small></section><section class="panel login-panel"><h2>${pendingQR() ? "Entre para ativar sua placa" : "Bem-vindo de volta"}</h2><p class="muted">${pendingQR() ? "Depois do login, confirme o código impresso na placa." : "Acesse sua operação Gear Go Digital."}</p><form id="login"><label>E-mail<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Senha<input type="password" name="password" autocomplete="current-password" required maxlength="128"></label><button class="full">Entrar</button></form><button id="forgot-password" class="secondary full" type="button">Esqueci minha senha</button><p class="hint">Não há cadastro público. Solicite seu acesso ao administrador.</p></section></div>`;
+  on("forgot-password", "click", () => forgotPassword());
   on("login", "submit", async (e) => {
     me = await api("/login", "POST", values(e));
     message("");
@@ -144,12 +157,18 @@ async function start() {
     pendingQR()
       ? "activate"
       : me.role === "ADMIN"
-        ? "batches"
+        ? "dashboard"
         : "establishments",
   );
 }
 const userOptions = (selected) =>
   users
+    .filter(
+      (u) =>
+        (!u.state || u.state === "ACTIVE") &&
+        !u.archived_at &&
+        u.commercial_type !== "REVENDEDOR",
+    )
     .map(
       (u) =>
         `<option value="${esc(u.id)}" ${u.id === selected ? "selected" : ""}>${esc(u.name)} · ${esc(u.email)}</option>`,
@@ -237,6 +256,7 @@ async function audit(type = "", id = "", before = "", category = "all") {
     batches: "Lotes",
     plates: "Placas",
     activations: "Ativações / Atribuições",
+    allocations: "Alocações de revenda",
     establishments: "Estabelecimentos",
     changes: "Alterações de dados / Link",
     blocks: "Bloqueios",
@@ -257,6 +277,7 @@ async function audit(type = "", id = "", before = "", category = "all") {
   );
 }
 (async () => {
+  if (accessEntry()) return;
   try {
     me = await api("/me");
     if (me.must_change_password) passwordForm();

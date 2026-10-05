@@ -33,6 +33,60 @@ header {
   text-decoration: none;
   letter-spacing: -0.5px;
 }
+.access-logo {
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+}
+.login-view .panel.narrow {
+  color: #172c45;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.stats strong {
+  display: block;
+  font-size: 30px;
+  margin-top: 8px;
+}
+.confirm-dialog {
+  width: min(92vw, 460px);
+  max-height: 90vh;
+  overflow: auto;
+  border: 0;
+  border-radius: 16px;
+  padding: 24px;
+}
+.confirm-dialog::backdrop {
+  background: #102034bb;
+}
+.danger {
+  background: #a51e32;
+  color: white;
+}
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.check-label input {
+  width: 22px;
+  min-height: 22px;
+}
+dt {
+  font-weight: 700;
+  margin-top: 12px;
+}
+dd {
+  margin-left: 0;
+}
+:focus-visible {
+  outline: 3px solid #2683ff;
+  outline-offset: 3px;
+}
 .brand .official-logo {
   width: 180px;
   height: auto;

@@ -6,6 +6,9 @@ export interface Env {
   PASSWORD_PEPPER: string;
   PUBLIC_BASE_URL?: string;
   QR_PRODUCTION_READY?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
+  EMAIL_REPLY_TO?: string;
 }
 export type User = {
   id: string;
@@ -14,6 +17,9 @@ export type User = {
   role: "ADMIN" | "USER";
   must_change_password: number;
   password_hash?: string;
+  commercial_type?: "EQUIPE_GEAR" | "REVENDEDOR";
+  state?: "INVITED" | "ACTIVE" | "SUSPENDED";
+  archived_at?: string | null;
 };
 export type Row = Record<string, any>;
 export class HttpError extends Error {
@@ -94,8 +100,24 @@ export function guard(db: D1Database, count = 1) {
 }
 export async function mutate(db: D1Database, stmts: D1PreparedStatement[]) {
   try {
-    await db.batch([...stmts, db.prepare("DELETE FROM mutation_guard")]);
+    return await db.batch([...stmts, db.prepare("DELETE FROM mutation_guard")]);
   } catch (e) {
+    if (/Insufficient units|Units reserved for resellers/.test(String(e)))
+      fail(
+        409,
+        "Unidades insuficientes ou reservadas para revenda neste lote.",
+      );
+    if (
+      /Invalid reseller|Invalid allocation batch|Inactive account|Inactive batch/.test(
+        String(e),
+      )
+    )
+      fail(409, "Usuário ou lote indisponível para esta operação.");
+    if (String(e).includes("FOREIGN KEY constraint"))
+      fail(
+        409,
+        "Existem vínculos que impedem excluir este registro. Use Arquivar.",
+      );
     if (
       String(e).includes("CHECK constraint failed") ||
       String(e).includes("UNIQUE constraint")
@@ -119,7 +141,7 @@ export async function current(req: Request, db: D1Database): Promise<User> {
   if (!token) fail(401, "Entre para continuar.");
   const u = await db
     .prepare(
-      "SELECT u.id,u.name,u.email,u.role,u.must_change_password FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?",
+      "SELECT u.id,u.name,u.email,u.role,u.must_change_password,u.commercial_type,u.state,u.archived_at FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND u.state='ACTIVE' AND u.archived_at IS NULL",
     )
     .bind(await digest(token!), Date.now())
     .first<User>();
