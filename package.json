@@ -16,7 +16,7 @@
     "db:v3:remote": "node scripts/migrate-v3.mjs --remote --apply",
     "db:v3:local": "node scripts/migrate-v3.mjs --local --apply",
     "admin": "node --import tsx scripts/create-admin.ts",
-    "deploy": "wrangler deploy && wrangler secret list"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260929.1",
