@@ -28,8 +28,8 @@ jobs:
           print("Current bindings:", [{"name":x.get("name"),"type":x.get("type")} for x in s.get("bindings",[])])
           for b in s.get("bindings",[]):
            if b.get("name")=="PASSWORD_PEPPER": print("Pepper plaintext length if available:",len(b["text"]) if "text" in b else "secret-redacted")
-          v=get("/versions")
-          for item in v.get("items",[])[:20]:
+          v=get("/versions?per_page=100")
+          for item in v.get("items",[]):
            vid=item["id"]; version=get("/versions/"+vid)
            bindings=version.get("resources",{}).get("bindings",[])
            pepper=[b for b in bindings if b.get("name")=="PASSWORD_PEPPER"]
