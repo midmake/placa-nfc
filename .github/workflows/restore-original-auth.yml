@@ -1,0 +1,40 @@
+name: Restore original authentication binding
+on:
+  push:
+    branches: [ops/admin-recovery-20261005]
+    paths: [.github/workflows/restore-original-auth.yml]
+permissions:
+  contents: read
+jobs:
+  restore:
+    if: github.repository == 'midmake/placa-nfc'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Restore exact original value without exposing it
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: python
+        run: |
+          import os,json,urllib.request
+          base="https://api.cloudflare.com/client/v4/accounts/"+os.environ["CLOUDFLARE_ACCOUNT_ID"]+"/workers/scripts/placa-nfc"
+          def api(path,body=None):
+           req=urllib.request.Request(base+path,data=json.dumps(body).encode() if body is not None else None,method="PUT" if body is not None else "GET",headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"})
+           try:
+            with urllib.request.urlopen(req,timeout=60) as response: data=json.load(response)
+           except Exception:
+            raise RuntimeError("Cloudflare operation failed; response suppressed") from None
+           assert data.get("success") is True,"Cloudflare operation failed"
+           return data["result"]
+          current=api("/settings")
+          assert not any(b.get("name")=="PASSWORD_PEPPER" for b in current.get("bindings",[])),"Pepper is already configured; stop rather than replace"
+          original=api("/versions/637fc429-c682-43e7-8ff8-af83803be9bf")
+          bindings=[b for b in original["resources"]["bindings"] if b.get("name")=="PASSWORD_PEPPER"]
+          assert len(bindings)==1 and bindings[0]["type"]=="plain_text" and len(bindings[0]["text"])==38,"Original binding mismatch"
+          api("/secrets",{"name":"PASSWORD_PEPPER","type":"secret_text","text":bindings[0]["text"]})
+          del bindings,original
+          check=api("/settings")
+          assert any(b.get("name")=="PASSWORD_PEPPER" and b.get("type")=="secret_text" for b in check.get("bindings",[]))
+          print("Original PASSWORD_PEPPER restored unchanged from original Worker version into secret storage; no database records modified.")
+          
