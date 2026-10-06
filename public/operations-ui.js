@@ -214,7 +214,7 @@ async function estDetail(id) {
 }
 async function batches() {
   const rows = await api("/batches");
-  app.innerHTML = `<div class="row"><div><p class="eyebrow">PRODUÇÃO & OPERAÇÃO</p><h1>Lotes de placas</h1></div><span class="muted">Sem estoque por vendedor</span></div><section class="panel"><h2>Criar lote</h2><form id="create-batch"><div class="grid"><label>Nome do lote<input name="name" required maxlength="100" placeholder="Lote A3009"></label><label>Quantidade<input type="number" name="quantity" min="1" max="5000" value="50" required></label></div><label class="check-label"><input name="is_test" type="checkbox"> Lote de teste (usar apenas dados fictícios)</label><p class="hint">Cada unidade gerada representa uma placa física. Elas nascem sem vendedor.</p><button>Gerar placas</button></form></section><div id="generation-progress" role="status"></div>${rows.map((b) => `<article class="panel batch-card"><div class="row"><h2>${esc(b.name)}${b.is_test ? " · TESTE" : ""}${b.archived_at ? " · ARQUIVADO" : ""}</h2><small>${esc(new Date(b.created_at).toLocaleDateString("pt-BR"))}</small></div><div class="lot-counts"><div><span>Total gerado</span><strong>${b.quantity.toLocaleString("pt-BR")}</strong></div><div><span>Ativas</span><strong>${b.active.toLocaleString("pt-BR")}</strong></div><div><span>Inativas</span><strong>${b.inactive.toLocaleString("pt-BR")}</strong></div><div><span>Bloqueadas</span><strong>${b.blocked.toLocaleString("pt-BR")}</strong></div></div>${b.generation_state !== "READY" ? `<p>Geração em andamento: ${b.quantity} / ${b.target_quantity}</p>` : ""}${b.pending_codes ? `<p class="hint">${b.pending_codes} placa(s) antiga(s) precisam receber o novo código físico. As URLs atuais não serão alteradas.</p>` : ""}<div class="actions">${!b.archived_at ? `<button class="danger" data-archive-batch="${esc(b.id)}">Arquivar</button>` : ""}${b.is_test ? `<button class="danger" data-delete-batch="${esc(b.id)}">Excluir teste</button>` : ""}${b.generation_state !== "READY" || b.pending_codes ? `<button data-generate="${esc(b.id)}">${b.pending_codes ? "Preparar códigos físicos" : "Continuar geração"}</button>` : `<button data-export="${esc(b.id)}">Gerar PDF / CSV</button>`}<button class="secondary" data-inspect="${esc(b.id)}">Ver placas</button></div><details><summary>Ferramentas administrativas</summary><button class="secondary" data-assign-batch="${esc(b.id)}">Atribuir placas inativas a um vendedor</button></details><div id="batch-${esc(b.id)}"></div></article>`).join("") || '<p class="empty">Nenhum lote criado.</p>'}<p class="hint">Ativas + inativas + bloqueadas = total gerado. Bloqueadas formam uma categoria separada, mesmo quando já ativadas. Sem bloqueio, placas reservadas contam como inativas.</p>`;
+  app.innerHTML = `<div class="row"><div><p class="eyebrow">PRODUÇÃO & OPERAÇÃO</p><h1>Lotes de placas</h1></div><span class="muted">Sem estoque por vendedor</span></div><section class="panel"><h2>Criar lote</h2><form id="create-batch"><div class="grid"><label>Nome do lote<input name="name" required maxlength="100" placeholder="Lote A3009"></label><label>Quantidade<input type="number" name="quantity" min="1" max="5000" value="50" required></label></div><label class="check-label"><input name="is_test" type="checkbox"> Lote de teste (usar apenas dados fictícios)</label><p class="hint">Cada unidade gerada representa uma placa física. Elas nascem sem vendedor.</p><button>Gerar placas</button></form></section><div id="generation-progress" role="status"></div>${rows.map((b) => `<article class="panel batch-card"><div class="row"><h2>${esc(b.name)}${b.is_test ? " · TESTE" : ""}${b.archived_at ? " · ARQUIVADO" : ""}</h2><small>${esc(new Date(b.created_at).toLocaleDateString("pt-BR"))}</small></div><div class="lot-counts"><div><span>Total gerado</span><strong>${b.quantity.toLocaleString("pt-BR")}</strong></div><div><span>Ativas</span><strong>${b.active.toLocaleString("pt-BR")}</strong></div><div><span>Inativas</span><strong>${b.inactive.toLocaleString("pt-BR")}</strong></div><div><span>Bloqueadas</span><strong>${b.blocked.toLocaleString("pt-BR")}</strong></div></div>${b.generation_state !== "READY" ? `<p>Geração em andamento: ${b.quantity} / ${b.target_quantity}</p>` : ""}${b.pending_codes ? `<p class="hint">${b.pending_codes} placa(s) antiga(s) precisam receber o novo código físico. As URLs atuais não serão alteradas.</p>` : ""}<div class="actions">${!b.archived_at ? `<button class="danger" data-archive-batch="${esc(b.id)}">Arquivar</button>` : ""}${b.is_test ? `<button class="danger" data-delete-batch="${esc(b.id)}">Excluir teste</button>` : ""}${b.generation_state !== "READY" || b.pending_codes ? `<button data-generate="${esc(b.id)}">${b.pending_codes ? "Preparar códigos físicos" : "Continuar geração"}</button>` : `<button data-export="${esc(b.id)}">Gerar arte para gráfica</button>`}<button class="secondary" data-inspect="${esc(b.id)}">Ver placas</button></div><details><summary>Ferramentas administrativas</summary><button class="secondary" data-assign-batch="${esc(b.id)}">Atribuir placas inativas a um vendedor</button></details><div id="batch-${esc(b.id)}"></div></article>`).join("") || '<p class="empty">Nenhum lote criado.</p>'}<p class="hint">Ativas + inativas + bloqueadas = total gerado. Bloqueadas formam uma categoria separada, mesmo quando já ativadas. Sem bloqueio, placas reservadas contam como inativas.</p>`;
   app
     .querySelectorAll("[data-archive-batch],[data-delete-batch]")
     .forEach((btn) =>
@@ -260,7 +260,11 @@ async function batches() {
     );
   app
     .querySelectorAll("[data-export]")
-    .forEach((btn) => onMatch(btn, () => printScreen(btn.dataset.export)));
+    .forEach((btn) =>
+      onMatch(btn, () =>
+        printScreen(rows.find((b) => b.id === btn.dataset.export)),
+      ),
+    );
 }
 async function continueGeneration(id) {
   // One small request per chunk; refresh/retry resumes the same lot, never restarts it.
@@ -281,12 +285,13 @@ function assignment(type, id) {
   });
   on("cancel-assign", "click", () => go("batches"));
 }
-async function printScreen(id) {
+async function printScreen(batch) {
+  const id = batch.id;
   const config = await api("/print-config"),
     templates = await (
       await fetch("/print-templates.json", { cache: "no-store" })
     ).json();
-  app.innerHTML = `<section class="panel"><p class="eyebrow">MATERIAL PARA GRÁFICA</p><h1>Gerar PDF</h1><p class="wrap">Origem dos QRs: <strong>${esc(config.origin)}</strong></p><form id="print-form"><label>Finalidade<select name="mode"><option value="test">Teste — não enviar à gráfica</option><option value="production" ${config.production_ready ? "" : "disabled"}>Produção — domínio definitivo</option></select></label><label>Template<select name="template">${templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}${t.ready ? "" : " · arte pendente"}</option>`).join("")}</select></label><p class="hint">${config.production_ready ? "Ao selecionar produção, confirme a origem definitiva antes de exportar." : "Produção bloqueada até configurar PUBLIC_BASE_URL definitivo e QR_PRODUCTION_READY=true. O modo teste usa a origem atual."}</p><div class="actions"><button>Gerar PDF</button><button type="button" id="csv" class="secondary">Baixar CSV</button><button type="button" id="cancel-print" class="secondary">Voltar</button></div></form><div id="pdf-state" role="status"></div><div id="pdf-downloads"></div><p class="hint">Arte oficial azul: 10 × 10 cm, sangria de 3 mm, QR e código individual nas posições aprovadas. A segunda cor aguarda arte. Cada PDF contém até 250 placas, uma por página.</p></section>`;
+  app.innerHTML = `<section class="panel"><p class="eyebrow">PRODUÇÃO DE PLACAS</p><h1>Gerar arte para gráfica</h1><h2>${esc(batch.name)}</h2><div class="lot-counts"><div><span>Placas no lote</span><strong>${batch.quantity.toLocaleString("pt-BR")}</strong></div><div><span>Prefixo do lote</span><strong class="code-label">${esc(batch.physical_prefix || "—")}</strong></div><div><span>Arquivos PDF</span><strong>${Math.ceil(batch.quantity / 250)}</strong></div></div><p class="wrap">Origem dos QRs: <strong>${esc(config.origin)}</strong></p><form id="print-form"><label>Template<select name="template">${templates.map((t) => `<option value="${esc(t.id)}" ${t.ready ? "" : "disabled"}>${esc(t.name)}${t.ready ? "" : " · arte pendente"}</option>`).join("")}</select></label><p class="hint" id="production-status">${config.production_ready ? "Domínio oficial liberado para produção. Confirme a origem antes de gerar a arte final." : "O domínio oficial ainda não foi validado. O PDF comercial será liberado após a configuração do domínio."}</p><p class="print-test-note"><strong>PDF DE TESTE</strong> — contém identificação de teste. Não enviar à gráfica nem comercializar.</p><div class="actions"><button name="mode" value="test">Gerar PDF DE TESTE</button><button name="mode" value="production" aria-describedby="production-status" ${config.production_ready ? "" : "disabled"}>PDF FINAL PARA GRÁFICA</button></div><details><summary>Exportação CSV</summary><label>Finalidade do CSV<select name="csv-mode"><option value="test">Teste — não comercializar</option><option value="production" ${config.production_ready ? "" : "disabled"}>Produção — domínio oficial</option></select></label><button type="button" id="csv" class="secondary">Baixar CSV</button></details><button type="button" id="cancel-print" class="secondary">Voltar aos lotes</button></form><div id="pdf-state" role="status" aria-live="polite"></div><div id="pdf-downloads"></div><p class="hint">Arte Oficial azul aprovada: corte de 100 × 100 mm, documento de 106 × 106 mm e sangria de 3 mm. QR vetorial único e código físico existente de cada placa, nas posições aprovadas. Uma placa por página, até 250 páginas por arquivo. Baixe todas as partes; um lote de 1.000 placas gera 4 PDFs.</p></section>`;
   const opts = () =>
     Object.fromEntries(new FormData(document.querySelector("#print-form")));
   const authorize = async (mode) => {
@@ -309,12 +314,15 @@ async function printScreen(id) {
     return true;
   };
   on("csv", "click", async () => {
-    const { mode } = opts();
+    const mode = opts()["csv-mode"];
     if (await authorize(mode))
       location.href = `/api/batches/${id}/csv?mode=${mode}`;
   });
-  on("print-form", "submit", async () => {
-    const { mode, template } = opts(),
+  on("print-form", "submit", async (event) => {
+    const mode = event.submitter?.value || "test";
+    if (mode === "production" && !config.production_ready)
+      throw new Error("O domínio oficial ainda não foi validado.");
+    const { template } = opts(),
       selected = templates.find((t) => t.id === template);
     if (!selected?.ready)
       throw new Error(

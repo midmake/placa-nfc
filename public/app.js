@@ -53,13 +53,14 @@ function on(id, event, fn) {
       target.tagName === "FORM"
         ? [...target.querySelectorAll("button")]
         : [target];
+    const previousDisabled = buttons.map((b) => b.disabled);
     buttons.forEach((b) => (b.disabled = true));
     try {
       await fn(e);
     } catch (err) {
       message(err.message, true);
     } finally {
-      buttons.forEach((b) => (b.disabled = false));
+      buttons.forEach((b, i) => (b.disabled = previousDisabled[i]));
     }
   });
 }
@@ -127,7 +128,7 @@ async function go(p) {
 function login() {
   document.body.classList.add("login-view");
   nav.innerHTML = "";
-  app.innerHTML = `<div class="login-layout"><section class="login-intro"><img class="official-logo" src="/gear-go-oficial.jpg" width="1536" height="512" alt="Gear Go Digital"><p class="eyebrow">GEAR GO DIGITAL</p><h1>Conexões reais.<br>Gestão simples.</h1><p>Suas placas, seus clientes.<br>Tudo no mesmo lugar.</p><div class="signal-line" aria-hidden="true"></div><small>Acesso exclusivo da equipe</small></section><section class="panel login-panel"><h2>${pendingQR() ? "Entre para ativar sua placa" : "Bem-vindo de volta"}</h2><p class="muted">${pendingQR() ? "Depois do login, confirme o código impresso na placa." : "Acesse sua operação Gear Go Digital."}</p><form id="login"><label>E-mail<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Senha<input type="password" name="password" autocomplete="current-password" required maxlength="128"></label><button class="full">Entrar</button></form><button id="forgot-password" class="secondary full" type="button">Esqueci minha senha</button><p class="hint">Não há cadastro público. Solicite seu acesso ao administrador.</p></section></div>`;
+  app.innerHTML = `<div class="login-layout"><section class="login-intro"><img class="official-logo" src="/gear-go-oficial.png" width="1536" height="512" alt="Gear Go Digital"><p class="eyebrow">GEAR GO DIGITAL</p><h1>Conexões reais.<br>Gestão simples.</h1><p>Suas placas, seus clientes.<br>Tudo no mesmo lugar.</p><div class="signal-line" aria-hidden="true"></div><small>Acesso exclusivo da equipe</small></section><section class="panel login-panel"><h2>${pendingQR() ? "Entre para ativar sua placa" : "Bem-vindo de volta"}</h2><p class="muted">${pendingQR() ? "Depois do login, confirme o código impresso na placa." : "Acesse sua operação Gear Go Digital."}</p><form id="login"><label>E-mail<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Senha<input type="password" name="password" autocomplete="current-password" required maxlength="128"></label><button class="full">Entrar</button></form><button id="forgot-password" class="secondary full" type="button">Esqueci minha senha</button><p class="hint">Não há cadastro público. Solicite seu acesso ao administrador.</p></section></div>`;
   on("forgot-password", "click", () => forgotPassword());
   on("login", "submit", async (e) => {
     me = await api("/login", "POST", values(e));

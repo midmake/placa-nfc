@@ -5,6 +5,10 @@
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
   "keep_vars": true,
+  // Only the application subdomain; root, mail and other DNS stay untouched.
+  "routes": [{ "pattern": "app.geargo.com.br", "custom_domain": true }],
+  // Keep commercial exports locked until authenticated domain/QR smoke tests.
+  "vars": { "QR_PRODUCTION_READY": "false" },
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",

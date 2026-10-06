@@ -5,9 +5,9 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #183238;
-  background: #f4f7f7;
-  --green: #115c58;
+  color: #182d49;
+  background: #f3f6fb;
+  --brand: #175cd3;
 }
 * {
   box-sizing: border-box;
@@ -20,8 +20,8 @@ header {
   display: flex;
   align-items: center;
   gap: 20px;
-  background: white;
-  border-bottom: 1px solid #dce4df;
+  background: #e7effb;
+  border-bottom: 1px solid #dce4ef;
 }
 .brand {
   display: flex;
@@ -29,7 +29,7 @@ header {
   gap: 10px;
   font-size: 20px;
   font-weight: 850;
-  color: var(--green);
+  color: var(--brand);
   text-decoration: none;
   letter-spacing: -0.5px;
 }
@@ -90,16 +90,12 @@ dd {
 .brand .official-logo {
   width: 180px;
   height: auto;
-  background: white;
-  padding: 6px;
-  border-radius: 8px;
+  object-fit: contain;
 }
 .login-intro > .official-logo {
   width: min(100%, 420px);
   height: auto;
-  background: white;
-  padding: 16px;
-  border-radius: 14px;
+  object-fit: contain;
 }
 [hidden] {
   display: none !important;
@@ -108,7 +104,7 @@ dd {
   font-size: 11px;
   letter-spacing: 2px;
   font-weight: 750;
-  color: #47736e;
+  color: #41648b;
   margin: 0 0 10px;
 }
 .brand .brand-wordmark {
@@ -127,8 +123,8 @@ dd {
 .login-view {
   min-height: 100vh;
   background:
-    radial-gradient(ellipse at 15% 45%, #174b46 0, transparent 55%),
-    radial-gradient(ellipse at 95% 20%, #142f44 0, transparent 55%), #0d1b22;
+    radial-gradient(ellipse at 15% 45%, #315f9e 0, transparent 55%),
+    radial-gradient(ellipse at 95% 20%, #153564 0, transparent 55%), #0b1932;
   color: #fff;
 }
 .login-view header {
@@ -137,10 +133,10 @@ dd {
 }
 .login-view .brand,
 .login-view footer a {
-  color: #ddfff6;
+  color: #e4edff;
 }
 .login-view .tagline {
-  color: #a7bbb8;
+  color: #b6c7e0;
 }
 .login-layout {
   display: grid;
@@ -158,27 +154,27 @@ dd {
 }
 .login-intro p:not(.eyebrow),
 .login-intro small {
-  color: #b0c8c4;
+  color: #c3d3ec;
 }
 .login-intro .eyebrow {
-  color: #75e9d2;
+  color: #91bbff;
   margin-top: 24px;
 }
 .login-panel {
-  color: #183238;
+  color: #182d49;
   padding: 30px;
-  border: 1px solid #a4ead428;
+  border: 1px solid #9abcf028;
   box-shadow: 0 24px 80px #0003;
   border-radius: 18px;
 }
 .signal-line {
   height: 2px;
   width: 96px;
-  background: linear-gradient(90deg, #6df9d5, transparent);
+  background: linear-gradient(90deg, #82afff, transparent);
   margin: 30px 0;
 }
 .login-view footer {
-  color: #b0c8c4;
+  color: #c3d3ec;
 }
 .login-view .install-help {
   display: none;
@@ -204,7 +200,7 @@ dd {
 }
 .plate-line {
   padding: 16px 0;
-  border-bottom: 1px solid #e3ece9;
+  border-bottom: 1px solid #e3eaf3;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -228,7 +224,7 @@ dd {
 }
 .seller-group summary span {
   font-size: 14px;
-  color: #52675d;
+  color: #52647c;
 }
 .lot-counts {
   display: grid;
@@ -239,11 +235,11 @@ dd {
 .lot-counts div {
   padding: 12px;
   border-radius: 8px;
-  background: #f4f8f7;
+  background: #f3f6fc;
 }
 .lot-counts span {
   font-size: 12px;
-  color: #52675d;
+  color: #52647c;
   display: block;
 }
 .lot-counts strong {
@@ -255,8 +251,8 @@ dd {
   font-size: 13px;
 }
 .match-panel {
-  background: #eef8f4;
-  border: 1px solid #b5d7c9;
+  background: #edf4ff;
+  border: 1px solid #b5ccef;
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 16px;
@@ -269,7 +265,7 @@ dd {
   margin-left: 16px;
 }
 .client-card {
-  border-top: 3px solid #d3ece4;
+  border-top: 3px solid #d3e2f8;
 }
 @media (max-width: 650px) {
   .login-layout {
@@ -325,7 +321,7 @@ dd {
 }
 .tagline {
   font-size: 13px;
-  color: #60736a;
+  color: #60718b;
 }
 nav {
   max-width: 1000px;
@@ -338,11 +334,11 @@ nav {
 nav button {
   min-height: 44px;
   background: white;
-  color: var(--green);
-  border: 1px solid #cbd8d0;
+  color: var(--brand);
+  border: 1px solid #cbd6e8;
 }
 nav button.selected {
-  background: var(--green);
+  background: var(--brand);
   color: white;
 }
 main {
@@ -368,12 +364,12 @@ p {
 }
 .muted,
 small {
-  color: #52675d;
+  color: #52647c;
 }
 .panel,
 .card {
   background: white;
-  border: 1px solid #dce4df;
+  border: 1px solid #dce4ef;
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 14px;
@@ -394,7 +390,7 @@ small {
   margin: 20px 0;
 }
 .stat {
-  border: 1px solid #dce4df;
+  border: 1px solid #dce4ef;
   background: white;
   border-radius: 10px;
   padding: 14px 20px;
@@ -424,7 +420,7 @@ button,
   min-height: 46px;
   border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--green);
+  background: var(--brand);
   color: white;
   padding: 10px 16px;
   text-decoration: none;
@@ -435,19 +431,19 @@ button,
 }
 button.secondary,
 .button.secondary {
-  background: #edf2ef;
-  color: var(--green);
-  border-color: #cbd8d0;
+  background: #edf2fa;
+  color: var(--brand);
+  border-color: #cbd6e8;
 }
 button:disabled {
   opacity: 0.5;
-  cursor: wait;
+  cursor: not-allowed;
 }
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 3px solid #d69e28;
+  outline: 3px solid #2683ff;
   outline-offset: 2px;
 }
 label {
@@ -462,12 +458,12 @@ select {
   font: inherit;
   font-weight: 400;
   padding: 12px;
-  border: 1px solid #aebfb5;
+  border: 1px solid #adbed6;
   border-radius: 8px;
   min-height: 48px;
   margin-top: 6px;
   background: white;
-  color: #172c22;
+  color: #172c45;
 }
 input[type="checkbox"] {
   width: auto;
@@ -481,8 +477,8 @@ form .grid {
   font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.5px;
-  background: #e6f1e9;
-  color: #1e5b3c;
+  background: #e6efff;
+  color: #244e97;
   padding: 5px 9px;
   border-radius: 6px;
 }
@@ -491,8 +487,8 @@ form .grid {
   color: #765008;
 }
 .badge.unassigned {
-  background: #edf0ef;
-  color: #526159;
+  background: #edf1f7;
+  color: #526179;
 }
 .search {
   display: flex;
@@ -519,8 +515,8 @@ form .grid {
 #notice:not(:empty) {
   padding: 14px 18px;
   border-radius: 8px;
-  border: 1px solid #b9d2c1;
-  background: #e9f6ed;
+  border: 1px solid #b9cde9;
+  background: #eaf2ff;
 }
 #notice.error {
   background: #fff0ee;
@@ -530,7 +526,7 @@ form .grid {
 .empty {
   padding: 32px;
   text-align: center;
-  color: #52675d;
+  color: #52647c;
 }
 .hint {
   font-size: 13px;
@@ -552,7 +548,7 @@ td,
 th {
   text-align: left;
   vertical-align: top;
-  border-bottom: 1px solid #dce4df;
+  border-bottom: 1px solid #dce4ef;
   padding: 8px;
   overflow-wrap: anywhere;
 }
@@ -560,7 +556,7 @@ th {
   font-weight: 650;
 }
 a {
-  color: var(--green);
+  color: var(--brand);
 }
 .wrap {
   overflow-wrap: anywhere;
@@ -625,5 +621,26 @@ details summary {
   }
   .audit table {
     min-width: 400px;
+  }
+}
+
+.print-test-note {
+  padding: 14px;
+  border-left: 3px solid #d39621;
+  background: #fff7e5;
+  color: #674611;
+}
+#pdf-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+@media (max-width: 540px) {
+  .brand .official-logo {
+    width: 150px;
+  }
+  header {
+    padding-block: 10px;
   }
 }

@@ -60,6 +60,25 @@ async function ui({
       needsChange = false;
       response = { ok: true };
     }
+    if (path === "/api/batches")
+      response = [
+        {
+          id: "lot-real",
+          name: "Lote aprovado",
+          physical_prefix: "A3009",
+          quantity: 1000,
+          active: 0,
+          inactive: 1000,
+          blocked: 0,
+          generation_state: "READY",
+          pending_codes: 0,
+          created_at: Date.now(),
+        },
+      ];
+    if (path === "/api/print-config")
+      response = { origin: "https://test.invalid", production_ready: false };
+    if (path === "/print-templates.json")
+      response = JSON.parse(source("print-templates.json"));
     if (path === "/api/categories") response = [{ name: "Barbearia" }];
     if (path === "/api/dashboard")
       response = {
@@ -125,6 +144,10 @@ test("dashboard ADMIN, produtos secundários e convite com entrega manual", asyn
   assert.match(w.document.body.textContent, /Instagram — Em breve/);
   w.document.querySelector('[data-page="users"]').click();
   await settle();
+  assert.match(
+    w.document.body.textContent,
+    /E-mail automático: não configurado/,
+  );
   submit("#invite-user", {
     name: "João",
     email: "joao@test.invalid",
@@ -245,4 +268,59 @@ test("layout mobile declara viewport, controles confortáveis e breakpoints estr
   assert.match(source("style.css"), /min-height:\s*4[468]px/);
   assert.match(source("style.css"), /max-width:\s*650px/);
   assert.match(source("style.css"), /grid-template-columns:\s*1fr/);
+});
+
+test("arte por lote mostra dados reais e mantém produção bloqueada após erro", async () => {
+  const { w, dom } = await ui({
+    logged: true,
+    role: "ADMIN",
+    url: "https://test.invalid/",
+  });
+  w.document.querySelector('[data-page="batches"]').click();
+  await settle();
+  w.document.querySelector('[data-export="lot-real"]').click();
+  await settle();
+  assert.equal(
+    w.document.querySelector("h1").textContent,
+    "Gerar arte para gráfica",
+  );
+  assert.match(w.document.body.textContent, /A3009/);
+  assert.match(w.document.body.textContent, /1.000/);
+  assert.match(
+    w.document.body.textContent,
+    /O domínio oficial ainda não foi validado/,
+  );
+  assert.equal(w.document.querySelector('[value="production"]').disabled, true);
+  const form = w.document.querySelector("#print-form");
+  form.querySelector('[name="template"]').value = "missing";
+  form.dispatchEvent(
+    new w.Event("submit", { bubbles: true, cancelable: true }),
+  );
+  await settle();
+  assert.equal(
+    w.document.querySelector('button[value="production"]').disabled,
+    true,
+  );
+  assert.equal(
+    w.document.querySelector('button[value="test"]').disabled,
+    false,
+  );
+  assert.match(
+    w.document.querySelector("#notice").textContent,
+    /arte aprovada/,
+  );
+  dom.window.close();
+});
+test("marca oficial transparente e favicon PNG integram login e PWA", () => {
+  const logo = readFileSync("public/gear-go-oficial.png");
+  assert.equal(logo[25], 6); // PNG RGBA, not an opaque JPEG.
+  assert.match(source("index.html"), /gear-go-oficial\.png/);
+  assert.match(source("app.js"), /gear-go-oficial\.png/);
+  assert.match(source("index.html"), /icons\/favicon\.png/);
+  const m = JSON.parse(source("manifest.webmanifest"));
+  assert.equal(m.theme_color, "#102748");
+  assert.equal(
+    m.icons.find((i: any) => i.purpose === "maskable").sizes,
+    "512x512",
+  );
 });
