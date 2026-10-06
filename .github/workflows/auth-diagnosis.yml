@@ -1,4 +1,4 @@
-name: Read-only A001 and QR verification
+name: Read-only plate activation diagnosis
 on:
   push:
     branches: [ops/admin-recovery-20261005]
@@ -11,42 +11,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Inspect A001 and verify existing QR redirects without writes
+      - name: Read plate eligibility only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: python
         run: |
-          import os,json,urllib.request,urllib.error,urllib.parse
-          root="https://api.cloudflare.com/client/v4"
+          import os,json,urllib.request
           headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"}
-          def api(path,body=None):
-           req=urllib.request.Request(root+path,headers=headers,data=json.dumps(body).encode() if body else None)
-           with urllib.request.urlopen(req,timeout=30) as r: d=json.load(r)
-           assert d.get("success"), "Cloudflare request failed"
-           return d["result"]
-          account=os.environ["CLOUDFLARE_ACCOUNT_ID"]
-          sql="SELECT b.name,b.is_test,b.generation_state,b.physical_prefix,b.production_origin,COUNT(p.id) AS quantity FROM batches b LEFT JOIN plates p ON p.batch_id=b.id WHERE b.name=? GROUP BY b.id"
-          path="/accounts/"+account+"/d1/database/bc6f8a86-9019-4fbb-ba3f-eaaf79d5378e/query"
-          rows=api(path,{"sql":sql,"params":["A001"]})[0]["results"]
-          print("A001_STATUS",json.dumps(rows))
-          samples=api(path,{"sql":"SELECT p.code,p.token,p.status,p.blocked FROM plates p JOIN batches b ON b.id=p.batch_id WHERE b.name=? ORDER BY p.id LIMIT 3","params":["A001"]})[0]["results"]
-          class NoRedirect(urllib.request.HTTPRedirectHandler):
-           def redirect_request(self,*args): return None
-          opener=urllib.request.build_opener(NoRedirect)
-          for n,p in enumerate(samples):
-           url="https://app.geargo.com.br/r/"+p["code"]+"-"+p["token"]
-           try:
-            r=opener.open(url,timeout=30); status=r.status; location=r.headers.get("Location","")
-           except urllib.error.HTTPError as e:
-            status=e.code; location=e.headers.get("Location",""); error_response=e
-           if status==403:
-            import re
-            body=error_response.read().decode("utf-8",errors="replace")
-            title=re.search(r"<title>([^<]{0,160})</title>",body,re.I)
-            print("QR_DIAGNOSTIC",{"status":status,"mitigated":error_response.headers.get("cf-mitigated"),"title":title.group(1) if title else "none","server":error_response.headers.get("server")})
-           valid=(status==200 if p["blocked"] else status==302 and (location.startswith("/?activate=") if p["status"]!="ACTIVE" else urllib.parse.urlparse(location).scheme=="https"))
-           print("QR_SAMPLE",n+1,"OK" if valid else "FAILED","HTTP",status)
-           assert valid, "QR route failed"
-          print("READ_ONLY_COMPLETE; NO DATABASE WRITES")
-          
+          path="https://api.cloudflare.com/client/v4/accounts/"+os.environ["CLOUDFLARE_ACCOUNT_ID"]+"/d1/database/bc6f8a86-9019-4fbb-ba3f-eaaf79d5378e/query"
+          sql="""SELECT p.physical_code,p.status,p.blocked,p.owner_id IS NULL AS unassigned,u.role AS owner_role,CASE WHEN lower(u.email)=? THEN 1 ELSE 0 END AS owned_by_requesting_admin,b.name,b.archived_at,b.product,p.establishment_id IS NOT NULL AS linked FROM plates p JOIN batches b ON b.id=p.batch_id LEFT JOIN users u ON u.id=p.owner_id WHERE p.physical_code=?"""
+          req=urllib.request.Request(path,headers=headers,data=json.dumps({"sql":sql,"params":["rafael.mkieling@gmail.com","A3009-URRW"]}).encode())
+          with urllib.request.urlopen(req,timeout=30) as r: d=json.load(r)
+          assert d.get("success"),"Cloudflare query failed"
+          print("PLATE_ELIGIBILITY",json.dumps(d["result"][0]["results"]))
+          print("READ ONLY; NO WRITES; NO TOKENS OR CUSTOMER DATA")
