@@ -1,4 +1,4 @@
-name: Release authorized plate reservation
+name: Verify authorized plate release (read only)
 on:
   push:
     branches: [ops/admin-recovery-20261005]
@@ -43,31 +43,7 @@ jobs:
           assert len(plates)==1,"Plate not uniquely found"
           p=plates[0]
           action="reservation_released_owner_request_20261006"
-          if p["owner_id"] is None:
-            assert p["status"]=="UNASSIGNED" and query("SELECT id FROM audit_log WHERE entity_type='plate' AND entity_id=? AND action=?",[str(p["id"]),action]),"Unexpected unassigned state"
-            print("ALREADY RELEASED; NO WRITES")
-          else:
-            assert p["status"]=="AVAILABLE" and p["blocked"]==0 and p["establishment_id"] is None and p["activated_at"] is None,"Plate state changed; no writes"
-            admins=query("SELECT id FROM users WHERE lower(email)=? AND role='ADMIN' AND state='ACTIVE' AND archived_at IS NULL",["rafael.mkieling@gmail.com"])
-            assert len(admins)==1,"Requesting admin not found"
-            bookmark=api("/time_travel/bookmark").get("bookmark")
-            assert bookmark,"No recovery bookmark"
-            print("RECOVERY_BOOKMARK",bookmark,flush=True)
-            counts=query("SELECT (SELECT COUNT(*) FROM plates) plates,(SELECT COUNT(*) FROM establishments) establishments,(SELECT COUNT(*) FROM users) users,(SELECT COUNT(*) FROM sessions) sessions")[0]
-            statements=[
-              {"sql":"INSERT INTO mutation_guard(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM plates WHERE id=? AND physical_code=? AND owner_id=? AND status='AVAILABLE' AND blocked=0 AND establishment_id IS NULL AND activated_at IS NULL) THEN 1 ELSE 0 END","params":[p["id"],p["physical_code"],p["owner_id"]]},
-              {"sql":"INSERT INTO audit_log(actor_id,entity_type,entity_id,action,old_data,new_data) SELECT ?,'plate',CAST(id AS TEXT),?,json_object('owner_id',owner_id,'status',status),json_object('owner_id',NULL,'status','UNASSIGNED','reason','Explicit owner authorization in support conversation') FROM plates WHERE id=?","params":[admins[0]["id"],action,p["id"]]},
-              {"sql":"UPDATE plates SET owner_id=NULL,status='UNASSIGNED' WHERE id=? AND owner_id=? AND status='AVAILABLE' AND establishment_id IS NULL","params":[p["id"],p["owner_id"]]},
-              {"sql":"INSERT INTO mutation_guard(ok) SELECT CASE WHEN changes()=1 THEN 1 ELSE 0 END"},
-              {"sql":"DELETE FROM activation_grants WHERE plate_id=?","params":[p["id"]]},
-              {"sql":"DELETE FROM mutation_guard"}
-            ]
-            result=api("/query",{"batch":statements})
-            assert all(r.get("success") for r in result),"Release batch failed"
-            after=query("SELECT * FROM plates WHERE id=?",[p["id"]])[0]
-            assert after["owner_id"] is None and after["status"]=="UNASSIGNED","Release not confirmed"
-            assert {k:v for k,v in p.items() if k not in ("owner_id","status")}=={k:v for k,v in after.items() if k not in ("owner_id","status")},"Identity or other plate data changed"
-            assert counts==query("SELECT (SELECT COUNT(*) FROM plates) plates,(SELECT COUNT(*) FROM establishments) establishments,(SELECT COUNT(*) FROM users) users,(SELECT COUNT(*) FROM sessions) sessions")[0],"Concurrent data counts changed; inspect"
-            assert len(query("SELECT id FROM audit_log WHERE entity_type='plate' AND entity_id=? AND action=?",[str(p["id"]),action]))==1,"Audit missing or duplicated"
-            integrity()
-            print("RELEASE_OK A3009-URRW; QR/CODE/IDENTITY PRESERVED; AUDIT OK; INTEGRITY OK")
+          audit=query("SELECT id FROM audit_log WHERE entity_type='plate' AND entity_id=? AND action=?",[str(p["id"]),action])
+          assert len(audit)==1,"Release audit not found"
+          print("READ_ONLY_VERIFY",{"physical_code":p["physical_code"],"status":p["status"],"unassigned":p["owner_id"] is None,"audit_confirmed":True})
+          print("No writes; one-time release completed previously.")
