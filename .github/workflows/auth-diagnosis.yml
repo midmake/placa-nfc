@@ -1,4 +1,4 @@
-name: Connect Gear Go application subdomain
+name: Read-only A001 and QR verification
 on:
   push:
     branches: [ops/admin-recovery-20261005]
@@ -11,31 +11,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Connect only app.geargo.com.br to the existing Worker
+      - name: Inspect A001 and verify existing QR redirects without writes
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: python
         run: |
-          import os,json,urllib.request,urllib.error
+          import os,json,urllib.request,urllib.error,urllib.parse
           root="https://api.cloudflare.com/client/v4"
           headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"}
-          def call(path, body=None):
-           try:
-            req=urllib.request.Request(root+path,headers=headers,data=json.dumps(body).encode() if body else None,method="PUT" if body else "GET")
-            with urllib.request.urlopen(req,timeout=30) as r: d=json.load(r)
-           except urllib.error.HTTPError as e:
-            print("CLOUDFLARE_REQUEST_FAILED",e.code); raise SystemExit(1)
-           if not d.get("success"): print("CLOUDFLARE_REQUEST_FAILED"); raise SystemExit(1)
+          def api(path,body=None):
+           req=urllib.request.Request(root+path,headers=headers,data=json.dumps(body).encode() if body else None)
+           with urllib.request.urlopen(req,timeout=30) as r: d=json.load(r)
+           assert d.get("success"), "Cloudflare request failed"
            return d["result"]
           account=os.environ["CLOUDFLARE_ACCOUNT_ID"]
-          zones=call("/zones?name=geargo.com.br")
-          assert len(zones)==1 and zones[0]["name"]=="geargo.com.br" and zones[0]["status"]=="active", "Zone not active"
-          domains=call("/accounts/"+account+"/workers/domains")
-          existing=[d for d in domains if d["hostname"]=="app.geargo.com.br"]
-          assert not existing or all(d["service"]=="placa-nfc" for d in existing), "Domain belongs to another service"
-          if not existing:
-           d=call("/accounts/"+account+"/workers/domains",{"hostname":"app.geargo.com.br","service":"placa-nfc","environment":"production","zone_id":zones[0]["id"]})
-           assert d["hostname"]=="app.geargo.com.br" and d["service"]=="placa-nfc"
-          print("CUSTOM_DOMAIN_ATTACHED app.geargo.com.br -> placa-nfc")
+          sql="SELECT b.name,b.is_test,b.generation_state,b.physical_prefix,b.production_origin,COUNT(p.id) AS quantity FROM batches b LEFT JOIN plates p ON p.batch_id=b.id WHERE b.name=? GROUP BY b.id"
+          path="/accounts/"+account+"/d1/database/bc6f8a86-9019-4fbb-ba3f-eaaf79d5378e/query"
+          rows=api(path,{"sql":sql,"params":["A001"]})[0]["results"]
+          print("A001_STATUS",json.dumps(rows))
+          samples=api(path,{"sql":"SELECT p.code,p.token,p.status,p.blocked FROM plates p JOIN batches b ON b.id=p.batch_id WHERE b.name=? ORDER BY p.id LIMIT 3","params":["A001"]})[0]["results"]
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+           def redirect_request(self,*args): return None
+          opener=urllib.request.build_opener(NoRedirect)
+          for n,p in enumerate(samples):
+           url="https://app.geargo.com.br/r/"+p["code"]+"-"+p["token"]
+           try:
+            r=opener.open(url,timeout=30); status=r.status; location=r.headers.get("Location","")
+           except urllib.error.HTTPError as e:
+            status=e.code; location=e.headers.get("Location","")
+           valid=(status==200 if p["blocked"] else status==302 and (location.startswith("/?activate=") if p["status"]!="ACTIVE" else urllib.parse.urlparse(location).scheme=="https"))
+           print("QR_SAMPLE",n+1,"OK" if valid else "FAILED","HTTP",status)
+           assert valid, "QR route failed"
+          print("READ_ONLY_COMPLETE; NO DATABASE WRITES")
           
