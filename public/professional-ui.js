@@ -76,9 +76,9 @@ function accessLink(result) {
   });
   el.scrollIntoView({ block: "center" });
 }
-async function people(q = "", offset = 0) {
-  const data = await api("/people?" + new URLSearchParams({ q, offset }));
-  app.innerHTML = `<h1>Usuários</h1><details class="panel create-section"><summary>Convidar usuário</summary><p class="hint">${data.email_ready ? "E-mail automático: configurado. O convite pessoal será enviado por e-mail." : "E-mail automático: não configurado. Copie o link pessoal e envie manualmente ao usuário."}</p><form id="invite-user"><div class="grid"><label>Nome<input name="name" maxlength="160" required></label><label>E-mail<input name="email" type="email" maxlength="254" required></label><label>Tipo<select name="commercial_type"><option value="EQUIPE_GEAR">Equipe Gear</option><option value="REVENDEDOR">Revendedor</option></select></label></div><button>Convidar usuário</button></form></details><div id="access-result" aria-live="polite"></div><form id="people-search" class="search"><label>Nome ou e-mail<input name="q" value="${esc(q)}"></label><button>Buscar</button></form><div class="grid">${
+async function people(q = "", offset = 0, type = "") {
+  const data = await api("/people?" + new URLSearchParams({ q, offset, type }));
+  app.innerHTML = `<h1>${type === "EQUIPE_GEAR" ? "Equipe GearGo" : type === "REVENDEDOR" ? "Revendedores" : "Usuários"}</h1><details class="panel create-section"><summary>Convidar usuário</summary><p class="hint">${data.email_ready ? "E-mail automático: configurado. O convite pessoal será enviado por e-mail." : "E-mail automático: não configurado. Copie o link pessoal e envie manualmente ao usuário."}</p><form id="invite-user"><div class="grid"><label>Nome<input name="name" maxlength="160" required></label><label>E-mail<input name="email" type="email" maxlength="254" required></label><label>Tipo<select name="commercial_type">${type !== "REVENDEDOR" ? '<option value="EQUIPE_GEAR">Equipe GearGo</option>' : ""}${type !== "EQUIPE_GEAR" ? '<option value="REVENDEDOR">Revendedor</option>' : ""}</select></label></div><button>Convidar usuário</button></form></details><div id="access-result" aria-live="polite"></div><form id="people-search" class="search"><label>Nome ou e-mail<input name="q" value="${esc(q)}"></label><button>Buscar</button></form><div class="grid">${
     data.users
       .map((u) => {
         const inviteStatus = u.consumed_at
@@ -101,12 +101,12 @@ async function people(q = "", offset = 0) {
     )
       return;
     const r = await api("/invitations", "POST", b);
-    await people(q);
+    await people(q, 0, type);
     accessLink(r);
   });
-  on("people-search", "submit", (e) => people(values(e).q));
-  on("people-first", "click", () => people(q));
-  on("people-more", "click", () => people(q, data.next_offset));
+  on("people-search", "submit", (e) => people(values(e).q, 0, type));
+  on("people-first", "click", () => people(q, 0, type));
+  on("people-more", "click", () => people(q, data.next_offset, type));
   app
     .querySelectorAll("[data-balance]")
     .forEach((btn) => onMatch(btn, () => balances(btn.dataset.balance)));
@@ -125,7 +125,7 @@ async function people(q = "", offset = 0) {
         if (!b) return;
       } else if (!confirm(`${btn.textContent} para ${u.name}?`)) return;
       const r = await api(`/people/${u.id}/${action}`, "POST", b);
-      await people(q, offset);
+      await people(q, offset, type);
       if (r.link) accessLink(r);
       else message("Usuário atualizado.");
     }),
@@ -163,7 +163,7 @@ async function balances(userId = me.id) {
     message("Unidades atribuídas.");
   });
   on("balance-activate", "click", () => go("activate"));
-  on("balance-back", "click", () => go(isAdmin ? "users" : "establishments"));
+  on("balance-back", "click", () => go(isAdmin ? "resellers" : "establishments"));
 }
 async function dashboard() {
   const d = await api("/dashboard"),
@@ -176,7 +176,7 @@ async function dashboard() {
       invitations: "Convites pendentes",
       month_activations: "Ativações neste mês",
     };
-  app.innerHTML = `<h1>Visão geral</h1><p>Olá, ${esc(me.name)}.</p><div class="quick-actions"><button id="quick-activate">Ativar placa</button><button id="quick-people" class="secondary">Equipe e revendedores</button></div><div class="stats">${Object.entries(
+  app.innerHTML = `<h1>Visão geral</h1><p>Olá, ${esc(me.name)}.</p><div class="quick-actions"><button id="quick-activate">Ativar placa</button><button id="quick-people" class="secondary">Equipe GearGo</button><button id="quick-resellers" class="secondary">Revendedores</button></div><div class="stats">${Object.entries(
     labels,
   )
     .map(
@@ -188,6 +188,7 @@ async function dashboard() {
     )}</div><section class="panel"><h2>Busca global</h2><form id="global-search" class="search"><label>Código, lote, estabelecimento, nome ou e-mail<input name="q" maxlength="160" required></label><button>Buscar</button></form><div id="global-results"></div></section><section class="panel"><h2>Últimas ativações</h2>${d.recent.map((p) => `<p><button class="secondary" data-trace="${p.id}">${esc(p.physical_code || p.id)}</button> ${esc(p.establishment_name)} · ${esc(p.actor)}<br><small>${esc(new Date(p.activated_at).toLocaleString("pt-BR"))} · ${commercialLabel(p.activation_type)}</small></p>`).join("") || '<p class="empty">Nenhuma ativação ainda.</p>'}</section><section class="panel"><h2>Lotes recentes</h2>${d.batches.map((b) => `<p>${esc(b.name)}${b.is_test ? " · TESTE" : ""}</p>`).join("") || "<p>Nenhum lote.</p>"}<button id="dashboard-lots">Abrir lotes</button></section><details class="panel"><summary>Produtos</summary><div id="products"></div></details>`;
   on("quick-activate", "click", () => go("activate"));
   on("quick-people", "click", () => go("users"));
+  on("quick-resellers", "click", () => go("resellers"));
   on("dashboard-lots", "click", () => go("batches"));
   on("global-search", "submit", (e) => globalSearch(values(e).q));
   bindTrace();

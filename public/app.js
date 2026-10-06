@@ -87,7 +87,7 @@ function menu() {
           ...(me.commercial_type === "REVENDEDOR" ? ["balance"] : []),
         ];
   const secondary = [
-    ...(me.role === "ADMIN" ? ["plates", "users", "audit"] : []),
+    ...(me.role === "ADMIN" ? ["plates", "users", "resellers", "audit"] : []),
     "password",
     "logout",
   ];
@@ -98,7 +98,8 @@ function menu() {
     activate: "Ativar placa",
     balance: "Meu saldo",
     plates: "Placas por vendedor",
-    users: "Usuários",
+    users: "Equipe GearGo",
+    resellers: "Revendedores",
     audit: "Histórico",
     password: "Senha",
     logout: "Sair",
@@ -133,7 +134,8 @@ async function go(p) {
     establishments,
     batches,
     userList,
-    users: people,
+    users: () => people("", 0, "EQUIPE_GEAR"),
+    resellers: () => people("", 0, "REVENDEDOR"),
     audit,
     activate: activationCode,
     password: passwordForm,
@@ -267,7 +269,8 @@ async function audit(type = "", id = "", before = "", category = "all") {
   );
   const categories = {
     all: "Todos",
-    users: "Usuários",
+    users: "Equipe GearGo",
+    resellers: "Revendedores",
     batches: "Lotes",
     plates: "Placas",
     activations: "Ativações / Atribuições",

@@ -425,12 +425,14 @@ export async function operations(
       fail(404, ACTIVATION_ERROR);
     const p = await db
       .prepare(
-        "SELECT id,code,token,physical_code,batch_id,owner_id FROM plates WHERE physical_code=? AND blocked=0 AND status<>'ACTIVE' AND (owner_id IS NULL OR owner_id=?)",
+        "SELECT id,code,token,physical_code,batch_id,owner_id FROM plates WHERE physical_code=? AND blocked=0 AND status<>'ACTIVE'",
       )
-      .bind(code, user.id)
+      .bind(code)
       .first<Row>();
     if (!p || (b.qr !== undefined && `${p.code}-${p.token}` !== b.qr))
       fail(404, ACTIVATION_ERROR);
+    if (p.owner_id && p.owner_id !== user.id)
+      fail(409, "Esta placa foi designada pelo administrador a outro usuário. Peça ao administrador para revisar a atribuição antes de ativar.");
     const eligibility = await allocationFor(db, user, p);
     const grant = randomToken();
     await db.batch([

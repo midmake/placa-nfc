@@ -132,6 +132,18 @@ export async function fixture() {
   return { db, env, call, lot, verify, activate, data, cookies };
 }
 
+test("listas de Equipe GearGo e Revendedores filtram no backend antes de paginar", async () => {
+  const f = await fixture();
+  f.db.sql.prepare("UPDATE users SET commercial_type='REVENDEDOR' WHERE id='seller-b'").run();
+  const team = await f.call("/api/people?type=EQUIPE_GEAR");
+  const resellers = await f.call("/api/people?type=REVENDEDOR");
+  assert.equal(team.r.status, 200);
+  assert.ok(team.b.users.some((u: any) => u.id === "seller-a"));
+  assert.ok(team.b.users.every((u: any) => u.commercial_type === "EQUIPE_GEAR"));
+  assert.deepEqual(resellers.b.users.map((u: any) => u.id), ["seller-b"]);
+  assert.equal((await f.call("/api/people?type=INVALID")).r.status, 400);
+});
+
 test("código físico aceita separadores de digitação sem corrigir letras erradas", () => {
   for (const code of ["A3009URRW", "a3009-urrw", " A3009 – URRW "])
     assert.equal(normalizeCode(code), "A3009-URRW");
@@ -274,7 +286,7 @@ test("ativação por QR exige correspondência exata entre QR e código", async 
   assert.equal(current.status, "ACTIVE");
   assert.ok(current.establishment_id);
 });
-test("código errado, placa alheia e placa bloqueada têm resposta indistinguível", async () => {
+test("reserva administrativa é informada; código errado e bloqueio continuam genéricos", async () => {
   const f = await fixture(),
     {
       plates: [p, b],
@@ -283,7 +295,6 @@ test("código errado, placa alheia e placa bloqueada têm resposta indistinguív
   await f.call(`/plates/${b.id}/block`, "POST", { blocked: true });
   const responses = await Promise.all([
     f.verify({ physical_code: "A3009-AAAA" }),
-    f.verify(p),
     f.verify(b),
     f.verify({ physical_code: "BAD" }),
   ]);
@@ -291,6 +302,11 @@ test("código errado, placa alheia e placa bloqueada têm resposta indistinguív
     assert.equal(r.r.status, 404);
     assert.deepEqual(r.b, responses[0].b);
   });
+  const reserved = await f.verify(p);
+  assert.equal(reserved.r.status, 409);
+  assert.match(reserved.b.error, /designada pelo administrador/);
+  const wrongQR = await f.verify(p, "seller-a", `${b.code}-${b.token}`);
+  assert.equal(wrongQR.r.status, 404);
 });
 test("limite de tentativas impede enumeração de códigos", async () => {
   const f = await fixture();
@@ -432,7 +448,7 @@ test("atribuição excepcional não aparece como estoque e exige vendedor corret
       .length,
     0,
   );
-  assert.equal((await f.verify(p, "seller-b")).r.status, 404);
+  assert.equal((await f.verify(p, "seller-b")).r.status, 409);
   const b = (await f.call("/api/batches")).b.find((b: any) => b.id === id);
   assert.equal(b.inactive, 1);
   assert.equal((await f.activate(p)).r.status, 200);

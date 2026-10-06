@@ -154,6 +154,21 @@ test("origem confirmada distingue download dos mesmos QRs sem armazenar PDFs", a
   dom.window.close();
 });
 
+test("Equipe GearGo e Revendedores têm entradas, listas e convites separados", async () => {
+  const { w, dom, requests } = await ui({ logged: true, role: "ADMIN", url: "https://test.invalid/" });
+  w.document.querySelector('#quick-people').click();
+  await settle();
+  assert.equal(w.document.querySelector('h1').textContent, "Equipe GearGo");
+  assert.deepEqual(Array.from(w.document.querySelectorAll('[name="commercial_type"] option')).map((o: any) => o.value), ["EQUIPE_GEAR"]);
+  w.document.querySelector('[data-page="resellers"]').click();
+  await settle();
+  assert.equal(w.document.querySelector('h1').textContent, "Revendedores");
+  assert.deepEqual(Array.from(w.document.querySelectorAll('[name="commercial_type"] option')).map((o: any) => o.value), ["REVENDEDOR"]);
+  assert.ok(requests.some(r => r.path.includes('type=EQUIPE_GEAR')));
+  assert.ok(requests.some(r => r.path.includes('type=REVENDEDOR')));
+  dom.window.close();
+});
+
 test("dashboard ADMIN, produtos secundários e convite com entrega manual", async () => {
   const { w, dom, requests, submit } = await ui({
     logged: true,
@@ -162,7 +177,7 @@ test("dashboard ADMIN, produtos secundários e convite com entrega manual", asyn
   });
   assert.match(w.document.body.textContent, /Visão geral/);
   assert.match(w.document.body.textContent, /Instagram — Em breve/);
-  w.document.querySelector('[data-page="users"]').click();
+  w.document.querySelector('[data-page="resellers"]').click();
   await settle();
   assert.match(
     w.document.body.textContent,

@@ -329,6 +329,8 @@ export async function professional(
   }
   if (path === "/api/people" && method === "GET") {
     admin(user);
+    const type = url.searchParams.get("type") || "";
+    if (type && !["EQUIPE_GEAR", "REVENDEDOR"].includes(type)) fail(400, "Tipo de usuário inválido.");
     const q = (url.searchParams.get("q") || "").slice(0, 160),
       offset = Math.max(
         0,
@@ -337,9 +339,9 @@ export async function professional(
     const rows = (
       await db
         .prepare(
-          "SELECT u.id,u.name,u.email,u.role,u.commercial_type,u.state,u.archived_at,u.created_at,t.id AS invitation_id,t.created_at AS invited_at,t.expires_at,t.revoked_at,t.consumed_at,t.delivery FROM users u LEFT JOIN access_tokens t ON t.id=(SELECT id FROM access_tokens WHERE user_id=u.id AND kind='INVITE' ORDER BY created_at DESC,id DESC LIMIT 1) WHERE (instr(lower(u.name),lower(?)) OR instr(lower(u.email),lower(?))) ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET ?",
+          "SELECT u.id,u.name,u.email,u.role,u.commercial_type,u.state,u.archived_at,u.created_at,t.id AS invitation_id,t.created_at AS invited_at,t.expires_at,t.revoked_at,t.consumed_at,t.delivery FROM users u LEFT JOIN access_tokens t ON t.id=(SELECT id FROM access_tokens WHERE user_id=u.id AND kind='INVITE' ORDER BY created_at DESC,id DESC LIMIT 1) WHERE (instr(lower(u.name),lower(?)) OR instr(lower(u.email),lower(?))) AND (?=\'\' OR u.commercial_type=?) ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET ?",
         )
-        .bind(q, q, offset)
+        .bind(q, q, type, type, offset)
         .all()
     ).results;
     return json({
