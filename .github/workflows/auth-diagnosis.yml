@@ -1,28 +1,73 @@
-name: Read-only plate activation diagnosis
+name: Release authorized plate reservation
 on:
   push:
     branches: [ops/admin-recovery-20261005]
     paths: [.github/workflows/auth-diagnosis.yml]
 permissions:
   contents: read
+concurrency:
+  group: placa-nfc-authorized-reservation-release
+  cancel-in-progress: false
 jobs:
-  diagnose:
+  release:
     if: github.repository == 'midmake/placa-nfc'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Read plate eligibility only
+      - name: Release only A3009-URRW with recovery and audit
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: python
         run: |
           import os,json,urllib.request
+          db="bc6f8a86-9019-4fbb-ba3f-eaaf79d5378e"
+          base="https://api.cloudflare.com/client/v4/accounts/"+os.environ["CLOUDFLARE_ACCOUNT_ID"]+"/d1/database/"+db
           headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"}
-          path="https://api.cloudflare.com/client/v4/accounts/"+os.environ["CLOUDFLARE_ACCOUNT_ID"]+"/d1/database/bc6f8a86-9019-4fbb-ba3f-eaaf79d5378e/query"
-          sql="""SELECT p.physical_code,p.status,p.blocked,p.owner_id IS NULL AS unassigned,u.role AS owner_role,CASE WHEN lower(u.email)=? THEN 1 ELSE 0 END AS owned_by_requesting_admin,b.name,b.archived_at,b.product,p.establishment_id IS NOT NULL AS linked FROM plates p JOIN batches b ON b.id=p.batch_id LEFT JOIN users u ON u.id=p.owner_id WHERE p.physical_code=?"""
-          req=urllib.request.Request(path,headers=headers,data=json.dumps({"sql":sql,"params":["rafael.mkieling@gmail.com","A3009-URRW"]}).encode())
-          with urllib.request.urlopen(req,timeout=30) as r: d=json.load(r)
-          assert d.get("success"),"Cloudflare query failed"
-          print("PLATE_ELIGIBILITY",json.dumps(d["result"][0]["results"]))
-          print("READ ONLY; NO WRITES; NO TOKENS OR CUSTOMER DATA")
+          def api(path="",body=None):
+            req=urllib.request.Request(base+path,headers=headers,data=json.dumps(body).encode() if body is not None else None)
+            with urllib.request.urlopen(req,timeout=30) as r: d=json.load(r)
+            assert d.get("success"),"Cloudflare request failed"
+            return d["result"]
+          def query(sql,params=[]):
+            results=api("/query",{"sql":sql,"params":params})
+            assert all(r.get("success") for r in results),"Query failed"
+            return [row for r in results for row in r.get("results",[])]
+          def integrity():
+            assert not query("PRAGMA foreign_key_check"),"Foreign key violation"
+            assert list(query("PRAGMA quick_check")[0].values())==["ok"],"Integrity failure"
+          info=api()
+          assert info["name"]=="placa-nfc" and info["uuid"]==db,"Wrong database"
+          integrity()
+          plates=query("SELECT * FROM plates WHERE physical_code=?",["A3009-URRW"])
+          assert len(plates)==1,"Plate not uniquely found"
+          p=plates[0]
+          action="reservation_released_owner_request_20261006"
+          if p["owner_id"] is None:
+            assert p["status"]=="UNASSIGNED" and query("SELECT id FROM audit_log WHERE entity_type='plate' AND entity_id=? AND action=?",[str(p["id"]),action]),"Unexpected unassigned state"
+            print("ALREADY RELEASED; NO WRITES")
+          else:
+            assert p["status"]=="AVAILABLE" and p["blocked"]==0 and p["establishment_id"] is None and p["activated_at"] is None,"Plate state changed; no writes"
+            admins=query("SELECT id FROM users WHERE lower(email)=? AND role='ADMIN' AND state='ACTIVE' AND archived_at IS NULL",["rafael.mkieling@gmail.com"])
+            assert len(admins)==1,"Requesting admin not found"
+            bookmark=api("/time_travel/bookmark").get("bookmark")
+            assert bookmark,"No recovery bookmark"
+            print("RECOVERY_BOOKMARK",bookmark,flush=True)
+            counts=query("SELECT (SELECT COUNT(*) FROM plates) plates,(SELECT COUNT(*) FROM establishments) establishments,(SELECT COUNT(*) FROM users) users,(SELECT COUNT(*) FROM sessions) sessions")[0]
+            statements=[
+              {"sql":"INSERT INTO mutation_guard(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM plates WHERE id=? AND physical_code=? AND owner_id=? AND status='AVAILABLE' AND blocked=0 AND establishment_id IS NULL AND activated_at IS NULL) THEN 1 ELSE 0 END","params":[p["id"],p["physical_code"],p["owner_id"]]},
+              {"sql":"INSERT INTO audit_log(actor_id,entity_type,entity_id,action,old_data,new_data) SELECT ?,'plate',CAST(id AS TEXT),?,json_object('owner_id',owner_id,'status',status),json_object('owner_id',NULL,'status','UNASSIGNED','reason','Explicit owner authorization in support conversation') FROM plates WHERE id=?","params":[admins[0]["id"],action,p["id"]]},
+              {"sql":"UPDATE plates SET owner_id=NULL,status='UNASSIGNED' WHERE id=? AND owner_id=? AND status='AVAILABLE' AND establishment_id IS NULL","params":[p["id"],p["owner_id"]]},
+              {"sql":"INSERT INTO mutation_guard(ok) SELECT CASE WHEN changes()=1 THEN 1 ELSE 0 END"},
+              {"sql":"DELETE FROM activation_grants WHERE plate_id=?","params":[p["id"]]},
+              {"sql":"DELETE FROM mutation_guard"}
+            ]
+            result=api("/query",{"batch":statements})
+            assert all(r.get("success") for r in result),"Release batch failed"
+            after=query("SELECT * FROM plates WHERE id=?",[p["id"]])[0]
+            assert after["owner_id"] is None and after["status"]=="UNASSIGNED","Release not confirmed"
+            assert {k:v for k,v in p.items() if k not in ("owner_id","status")}=={k:v for k,v in after.items() if k not in ("owner_id","status")},"Identity or other plate data changed"
+            assert counts==query("SELECT (SELECT COUNT(*) FROM plates) plates,(SELECT COUNT(*) FROM establishments) establishments,(SELECT COUNT(*) FROM users) users,(SELECT COUNT(*) FROM sessions) sessions")[0],"Concurrent data counts changed; inspect"
+            assert len(query("SELECT id FROM audit_log WHERE entity_type='plate' AND entity_id=? AND action=?",[str(p["id"]),action]))==1,"Audit missing or duplicated"
+            integrity()
+            print("RELEASE_OK A3009-URRW; QR/CODE/IDENTITY PRESERVED; AUDIT OK; INTEGRITY OK")
