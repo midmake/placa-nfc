@@ -6,6 +6,7 @@ import { digest } from "../src/security";
 import {
   lotPrefix,
   physicalCode,
+  normalizeCode,
   PHYSICAL_ALPHABET,
 } from "../src/physical-code";
 import { TestDB } from "./db";
@@ -130,6 +131,36 @@ export async function fixture() {
   };
   return { db, env, call, lot, verify, activate, data, cookies };
 }
+
+test("código físico aceita separadores de digitação sem corrigir letras erradas", () => {
+  for (const code of ["A3009URRW", "a3009-urrw", " A3009 – URRW "])
+    assert.equal(normalizeCode(code), "A3009-URRW");
+  assert.equal(normalizeCode("A3009-URRK"), "A3009-URRK");
+  assert.equal(normalizeCode("A3009/URRW"), "");
+  assert.equal(normalizeCode(null), "");
+});
+
+test("ADMIN vende via QR e código sem hífen; vínculo ocorre somente ao concluir", async () => {
+  const f = await fixture();
+  const { plates: [p] } = await f.lot(1);
+  const verified = await f.call("/api/activation/verify", "POST", {
+    code: p.physical_code.replace("-", "").toLowerCase(),
+    qr: `${p.code}-${p.token}`,
+  });
+  assert.equal(verified.r.status, 200, JSON.stringify(verified.b));
+  assert.equal(f.db.sql.prepare("SELECT owner_id FROM plates WHERE id=?").get(p.id)?.owner_id, null);
+  const completed = await f.call("/api/activation/complete", "POST", {
+    ...f.data, grant: verified.b.grant,
+  });
+  assert.equal(completed.r.status, 200, JSON.stringify(completed.b));
+  const plate = f.db.sql.prepare("SELECT owner_id,status FROM plates WHERE id=?").get(p.id);
+  assert.ok(plate);
+  assert.equal(plate.owner_id, "admin");
+  assert.equal(plate.status, "ACTIVE");
+  const redirect = await f.call(`/r/${p.code}-${p.token}`);
+  assert.equal(redirect.r.status, 302);
+  assert.equal(redirect.r.headers.get("location"), f.data.google_url);
+});
 
 test("lote grande de 1000: retomável, sem vendedor, códigos únicos, contadores exatos", async () => {
   const f = await fixture(),

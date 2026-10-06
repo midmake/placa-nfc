@@ -134,6 +134,26 @@ async function ui({
   }
   return { w, dom, requests, submit };
 }
+test("ativação aceita digitação sem hífen e limpa erro anterior ao editar", async () => {
+  const { w, dom } = await ui({ logged: true, role: "ADMIN" });
+  const input = w.document.querySelector('#verify-code [name="code"]');
+  input.value = "A3009URRW";
+  assert.equal(input.checkValidity(), true);
+  w.eval('message("Erro anterior", true)');
+  input.dispatchEvent(new w.Event("input", { bubbles: true }));
+  assert.ok(!w.document.body.textContent.includes("Erro anterior"));
+  dom.window.close();
+});
+
+test("origem confirmada distingue download dos mesmos QRs sem armazenar PDFs", async () => {
+  const { w, dom } = await ui({ logged: true, role: "ADMIN" });
+  await w.eval('printScreen({id:"lot",name:"A001",quantity:5,physical_prefix:"A3009",is_test:0,production_origin:"https://test.invalid"})');
+  assert.match(w.document.querySelector('button[value="production"]').textContent, /mesmos QRs/);
+  assert.match(w.document.body.textContent, /Não cria novas placas nem altera os QRs/);
+  assert.match(w.document.body.textContent, /não ficam armazenados na plataforma/);
+  dom.window.close();
+});
+
 test("dashboard ADMIN, produtos secundários e convite com entrega manual", async () => {
   const { w, dom, requests, submit } = await ui({
     logged: true,

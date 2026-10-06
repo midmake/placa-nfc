@@ -30,8 +30,13 @@ export function physicalCode(
     }
   return prefix + "-" + suffix;
 }
-export const normalizeCode = (v: unknown): string =>
-  typeof v === "string" ? v.trim().toUpperCase() : "";
+export const normalizeCode = (v: unknown): string => {
+  if (typeof v !== "string") return "";
+  const code = v.trim().toUpperCase().replace(/[\s\u2010-\u2015\u2212-]+/g, "");
+  return /^A\d{4}[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/.test(code)
+    ? code.slice(0, 5) + "-" + code.slice(5)
+    : "";
+};
 export const validPhysicalCode = (v: string) =>
   /^A\d{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/.test(v);
 export const validQrKey = (v: unknown): v is string =>
