@@ -13,7 +13,9 @@ acabamento. O teste inclui marcação e nome de arquivo não comercial.
 ## Marca
 
 public/gear-go-oficial.png é o PNG transparente oficial fornecido (2172×724).
-scripts/render-icons.mjs recorta os pixels do primeiro G, sem fonte substituta,
+O login e cabeçalho continuam usando esse PNG transparente. Os ícones usam
+assets/brand/pwa-approved.jpeg, arte quadrada escolhida pelo usuário em
+2026-10-06. scripts/render-icons.mjs preserva essa imagem inteira, sem redesenho,
 e gera favicon, apple-touch-icon, 192, 512 e maskable com área segura.
 Os ícones têm referência versionada para atualização da PWA; atalhos já
 instalados podem precisar ser reinstalados pelo sistema operacional.
