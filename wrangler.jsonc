@@ -7,8 +7,11 @@
   "keep_vars": true,
   // Only the application subdomain; root, mail and other DNS stay untouched.
   "routes": [{ "pattern": "app.geargo.com.br", "custom_domain": true }],
-  // Keep commercial exports locked until authenticated domain/QR smoke tests.
-  "vars": { "QR_PRODUCTION_READY": "false" },
+  // Official HTTPS login and existing-plate QR confirmed by owner on 2026-10-06.
+  "vars": {
+    "PUBLIC_BASE_URL": "https://app.geargo.com.br",
+    "QR_PRODUCTION_READY": "true"
+  },
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",

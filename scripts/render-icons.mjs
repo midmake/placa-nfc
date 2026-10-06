@@ -1,14 +1,14 @@
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 // User-approved square PWA artwork, supplied 2026-10-06.
-// Preserve the whole image: no redraw, letter substitution or logo crop.
+// Exterior white removed from the supplied artwork; preserve logo geometry.
 const require = createRequire(
   process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
     ? process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES + "/package.json"
     : import.meta.url,
 );
 const sharp = require("sharp");
-const symbol = await sharp("assets/brand/pwa-approved.jpeg")
+const symbol = await sharp("assets/brand/pwa-transparent.png")
   .png()
   .toBuffer();
 mkdirSync("public/icons", { recursive: true });
