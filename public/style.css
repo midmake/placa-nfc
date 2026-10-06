@@ -644,3 +644,256 @@ details summary {
     padding-block: 10px;
   }
 }
+
+/* Compact operational layout: primary actions first, details on demand. */
+.password-control {
+  position: relative;
+  display: block;
+}
+.password-control input {
+  padding-right: 52px;
+}
+.password-toggle {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  background: transparent;
+  color: #335583;
+}
+.password-toggle[aria-pressed="true"] {
+  background: #e8effb;
+}
+nav {
+  position: relative;
+  align-items: start;
+}
+.nav-primary {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+}
+.nav-primary button {
+  flex: 1;
+  white-space: nowrap;
+}
+.nav-more summary {
+  padding: 10px 16px;
+  border: 1px solid #cbd6e8;
+  border-radius: 8px;
+  background: white;
+  color: #175cd3;
+}
+.nav-more > div {
+  position: absolute;
+  right: 18px;
+  top: 50px;
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  padding: 10px;
+  border: 1px solid #dce4ef;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 12px 30px #172c4520;
+}
+.nav-more button {
+  justify-content: start;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid #dce4ef;
+  border-radius: 12px;
+  background: white;
+  overflow: hidden;
+}
+.stats .card {
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid #e5ebf5;
+  margin: 0;
+  padding: 14px 16px;
+}
+.stats .card span {
+  display: block;
+  color: #52647c;
+  font-size: 13px;
+}
+.stats strong {
+  font-size: 26px;
+  margin: 2px 0 0;
+}
+.lot-counts {
+  gap: 0;
+  margin: 12px 0;
+  border-block: 1px solid #e5ebf5;
+}
+.lot-counts div {
+  background: transparent;
+  padding: 10px 8px;
+}
+.lot-counts strong {
+  font-size: 22px;
+}
+.batch-card .actions {
+  margin-top: 8px;
+}
+.create-section summary {
+  font-weight: 700;
+  color: #175cd3;
+}
+.create-section:not([open]) {
+  padding-block: 4px;
+}
+.create-section[open] summary {
+  margin-bottom: 12px;
+}
+.activation-success {
+  padding: 16px;
+  margin-bottom: 18px;
+  border: 1px solid #a4bee6;
+  border-radius: 12px;
+  background: #edf4ff;
+}
+.client-extra summary {
+  color: #175cd3;
+  font-size: 14px;
+}
+.client-card .chip-list {
+  max-height: 90px;
+  overflow: auto;
+}
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+@media (max-width: 650px) {
+  main {
+    margin-top: 14px;
+    padding-inline: 12px;
+  }
+  header {
+    padding: 9px 14px;
+  }
+  nav {
+    margin-top: 10px;
+    padding: 0 12px;
+    gap: 6px;
+  }
+  .nav-primary {
+    gap: 4px;
+    min-width: 0;
+  }
+  .nav-primary button {
+    font-size: 12px;
+    padding: 8px 5px;
+  }
+  .nav-more summary {
+    font-size: 12px;
+    padding: 11px 8px;
+  }
+  .nav-more > div {
+    right: 12px;
+  }
+  .panel,
+  .card {
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 12px 0 16px;
+  }
+  .stats .card {
+    padding: 10px 12px;
+  }
+  .stats strong {
+    font-size: 24px;
+  }
+  .lot-counts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .lot-counts div {
+    padding: 8px 4px;
+    min-width: 0;
+  }
+  .lot-counts span {
+    font-size: 11px;
+  }
+  .lot-counts strong {
+    font-size: 20px;
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+  }
+  .actions {
+    gap: 6px;
+  }
+  .actions > * {
+    flex: 1 1 130px;
+  }
+  .search {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .search label {
+    min-width: 0;
+  }
+  .search label:first-child {
+    grid-column: 1 / -1;
+  }
+  .search button {
+    width: 100%;
+  }
+  .search input,
+  .search select {
+    padding: 10px;
+  }
+  .hint {
+    margin: 10px 0;
+  }
+  .narrow {
+    margin: 16px auto;
+  }
+  .plate-line {
+    padding: 12px 0;
+  }
+  .plate-line .actions {
+    margin-top: 4px;
+  }
+  .login-intro h1 {
+    font-size: 27px;
+  }
+  .login-intro > .official-logo {
+    width: min(85%, 280px);
+  }
+  .login-intro p:not(.eyebrow) {
+    margin-bottom: 8px;
+  }
+  .login-layout {
+    gap: 14px;
+  }
+  footer {
+    padding: 12px;
+  }
+}
+@media (max-width: 360px) {
+  .nav-primary button {
+    font-size: 11px;
+  }
+  .lot-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .login-view header {
+    display: none;
+  }
+}

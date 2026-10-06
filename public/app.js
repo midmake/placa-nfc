@@ -28,11 +28,18 @@ function message(s, error = false) {
   notice.className = error ? "error" : "";
 }
 async function api(path, method = "GET", data) {
-  const r = await fetch("/api" + path, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-  });
+  let r;
+  try {
+    r = await fetch("/api" + path, {
+      method,
+      headers: data ? { "Content-Type": "application/json" } : {},
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  } catch {
+    throw new Error(
+      "Não foi possível conectar. Confira sua internet e tente novamente; o preenchimento continua nesta tela.",
+    );
+  }
   const b = await r.json();
   if (!r.ok) {
     if (r.status === 401 && path !== "/login") {
@@ -57,6 +64,7 @@ function on(id, event, fn) {
     buttons.forEach((b) => (b.disabled = true));
     try {
       await fn(e);
+      if (target.tagName === "FORM") delete target.dataset.dirty;
     } catch (err) {
       message(err.message, true);
     } finally {
@@ -66,32 +74,38 @@ function on(id, event, fn) {
 }
 const values = (e) => Object.fromEntries(new FormData(e.currentTarget));
 function menu() {
-  nav.innerHTML =
-    me && !me.must_change_password
-      ? [
-          ...(me.role === "ADMIN"
-            ? [
-                "dashboard",
-                "batches",
-                "plates",
-                "establishments",
-                "users",
-                "audit",
-              ]
-            : [
-                "establishments",
-                ...(me.commercial_type === "REVENDEDOR" ? ["balance"] : []),
-              ]),
+  if (!me || me.must_change_password) {
+    nav.innerHTML = "";
+    return;
+  }
+  const primary =
+    me.role === "ADMIN"
+      ? ["dashboard", "batches", "establishments", "activate"]
+      : [
+          "establishments",
           "activate",
-          "password",
-          "logout",
-        ]
-          .map(
-            (p) =>
-              `<button data-page="${p}" class="${p === page ? "selected" : ""}">${{ dashboard: "Visão geral", balance: "Meu saldo", plates: "Placas por vendedor", establishments: me.role === "ADMIN" ? "Estabelecimentos" : "Meus clientes", batches: "Lotes", activate: "Ativar placa", users: "Usuários", audit: "Histórico", password: "Senha", logout: "Sair" }[p]}</button>`,
-          )
-          .join("")
-      : "";
+          ...(me.commercial_type === "REVENDEDOR" ? ["balance"] : []),
+        ];
+  const secondary = [
+    ...(me.role === "ADMIN" ? ["plates", "users", "audit"] : []),
+    "password",
+    "logout",
+  ];
+  const labels = {
+    dashboard: "Início",
+    batches: "Lotes",
+    establishments: "Clientes",
+    activate: "Ativar placa",
+    balance: "Meu saldo",
+    plates: "Placas por vendedor",
+    users: "Usuários",
+    audit: "Histórico",
+    password: "Senha",
+    logout: "Sair",
+  };
+  const item = (p) =>
+    `<button data-page="${p}" ${p === page ? 'aria-current="page"' : ""} class="${p === page ? "selected" : ""}">${labels[p]}</button>`;
+  nav.innerHTML = `<div class="nav-primary">${primary.map(item).join("")}</div><details class="nav-more" ${secondary.includes(page) ? "open" : ""}><summary>Mais</summary><div>${secondary.map(item).join("")}</div></details>`;
   nav
     .querySelectorAll("button")
     .forEach(

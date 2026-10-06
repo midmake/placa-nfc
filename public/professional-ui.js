@@ -78,7 +78,7 @@ function accessLink(result) {
 }
 async function people(q = "", offset = 0) {
   const data = await api("/people?" + new URLSearchParams({ q, offset }));
-  app.innerHTML = `<h1>Usuários</h1><section class="panel"><h2>Convidar usuário</h2><p class="hint">${data.email_ready ? "E-mail automático: configurado. O convite pessoal será enviado por e-mail." : "E-mail automático: não configurado. Copie o link pessoal e envie manualmente ao usuário."}</p><form id="invite-user"><div class="grid"><label>Nome<input name="name" maxlength="160" required></label><label>E-mail<input name="email" type="email" maxlength="254" required></label><label>Tipo<select name="commercial_type"><option value="EQUIPE_GEAR">Equipe Gear</option><option value="REVENDEDOR">Revendedor</option></select></label></div><button>Convidar usuário</button></form></section><div id="access-result" aria-live="polite"></div><form id="people-search" class="search"><label>Nome ou e-mail<input name="q" value="${esc(q)}"></label><button>Buscar</button></form><div class="grid">${
+  app.innerHTML = `<h1>Usuários</h1><details class="panel create-section"><summary>Convidar usuário</summary><p class="hint">${data.email_ready ? "E-mail automático: configurado. O convite pessoal será enviado por e-mail." : "E-mail automático: não configurado. Copie o link pessoal e envie manualmente ao usuário."}</p><form id="invite-user"><div class="grid"><label>Nome<input name="name" maxlength="160" required></label><label>E-mail<input name="email" type="email" maxlength="254" required></label><label>Tipo<select name="commercial_type"><option value="EQUIPE_GEAR">Equipe Gear</option><option value="REVENDEDOR">Revendedor</option></select></label></div><button>Convidar usuário</button></form></details><div id="access-result" aria-live="polite"></div><form id="people-search" class="search"><label>Nome ou e-mail<input name="q" value="${esc(q)}"></label><button>Buscar</button></form><div class="grid">${
     data.users
       .map((u) => {
         const inviteStatus = u.consumed_at
@@ -176,7 +176,7 @@ async function dashboard() {
       invitations: "Convites pendentes",
       month_activations: "Ativações neste mês",
     };
-  app.innerHTML = `<h1>Visão geral</h1><p>Olá, ${esc(me.name)}.</p><div class="stats">${Object.entries(
+  app.innerHTML = `<h1>Visão geral</h1><p>Olá, ${esc(me.name)}.</p><div class="quick-actions"><button id="quick-activate">Ativar placa</button><button id="quick-people" class="secondary">Equipe e revendedores</button></div><div class="stats">${Object.entries(
     labels,
   )
     .map(
@@ -186,6 +186,8 @@ async function dashboard() {
     .join(
       "",
     )}</div><section class="panel"><h2>Busca global</h2><form id="global-search" class="search"><label>Código, lote, estabelecimento, nome ou e-mail<input name="q" maxlength="160" required></label><button>Buscar</button></form><div id="global-results"></div></section><section class="panel"><h2>Últimas ativações</h2>${d.recent.map((p) => `<p><button class="secondary" data-trace="${p.id}">${esc(p.physical_code || p.id)}</button> ${esc(p.establishment_name)} · ${esc(p.actor)}<br><small>${esc(new Date(p.activated_at).toLocaleString("pt-BR"))} · ${commercialLabel(p.activation_type)}</small></p>`).join("") || '<p class="empty">Nenhuma ativação ainda.</p>'}</section><section class="panel"><h2>Lotes recentes</h2>${d.batches.map((b) => `<p>${esc(b.name)}${b.is_test ? " · TESTE" : ""}</p>`).join("") || "<p>Nenhum lote.</p>"}<button id="dashboard-lots">Abrir lotes</button></section><details class="panel"><summary>Produtos</summary><div id="products"></div></details>`;
+  on("quick-activate", "click", () => go("activate"));
+  on("quick-people", "click", () => go("users"));
   on("dashboard-lots", "click", () => go("batches"));
   on("global-search", "submit", (e) => globalSearch(values(e).q));
   bindTrace();

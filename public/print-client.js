@@ -24,7 +24,10 @@ export async function generateBatchPDF({
   api,
   onProgress,
   container,
+  preview = false,
 }) {
+  if (preview && mode !== "test")
+    throw new Error("A prévia deve ser de teste.");
   if (!template.ready || !template.asset || !template.layout)
     throw new Error("Artes pendentes.");
   if (
@@ -49,6 +52,7 @@ export async function generateBatchPDF({
       if (origin && data.origin !== origin)
         throw new Error("A origem mudou durante a exportação. Recomece.");
       origin = data.origin;
+      if (preview) data.plates = data.plates.slice(0, 1);
       if (data.plates.length) {
         const bytes = await runPart(
           worker,
@@ -62,15 +66,24 @@ export async function generateBatchPDF({
         link.className = "button secondary";
         link.href = url;
         link.download = `${mode === "test" ? "TESTE-NAO-IMPRIMIR-" : ""}gear-go-${batchId.slice(0, 8)}-parte-${String(part).padStart(3, "0")}.pdf`;
-        link.textContent = `Baixar PDF · parte ${part} (${data.plates.length} placas)`;
+        link.textContent = `${preview ? "Baixar prévia de teste" : "Baixar PDF"} · parte ${part} (${data.plates.length} placas)`;
+        if (preview) {
+          const open = document.createElement("a");
+          open.className = "button";
+          open.href = url;
+          open.target = "_blank";
+          open.rel = "noopener";
+          open.textContent = "Abrir prévia de teste";
+          container.append(open);
+        }
         container.append(link);
         part++;
         completed += data.plates.length;
       }
-      after = data.next_after ? String(data.next_after) : "";
+      after = !preview && data.next_after ? String(data.next_after) : "";
     } while (after);
     onProgress(
-      `Concluído: ${completed} placas em ${part - 1} arquivo(s). Baixe todas as partes.`,
+      `${preview ? "Prévia de teste" : "Concluído"}: ${completed} placas em ${part - 1} arquivo(s). Baixe todas as partes.`,
     );
   } finally {
     worker.terminate();

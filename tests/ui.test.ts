@@ -118,7 +118,7 @@ async function ui({
     return { ok: status < 400, status, json: async () => response };
   };
   w.eval(
-    ["flow.js", "operations-ui.js", "professional-ui.js", "app.js"]
+    ["flow.js", "operations-ui.js", "professional-ui.js", "app.js", "ux.js"]
       .map(source)
       .join("\n"),
   );
@@ -323,4 +323,68 @@ test("marca oficial transparente e favicon PNG integram login e PWA", () => {
     m.icons.find((i: any) => i.purpose === "maskable").sizes,
     "512x512",
   );
+});
+
+test("olho da senha alterna visibilidade sem mudar valor e sem enviar formulário", async () => {
+  const { w, dom, requests } = await ui({ url: "https://test.invalid/" });
+  const input = w.document.querySelector('#login input[name="password"]');
+  input.value = "typed-password";
+  const toggle = w.document.querySelector("#login .password-toggle");
+  assert.ok(toggle);
+  toggle.click();
+  assert.equal(input.type, "text");
+  assert.equal(input.value, "typed-password");
+  assert.equal(toggle.getAttribute("aria-label"), "Ocultar senha");
+  toggle.click();
+  assert.equal(input.type, "password");
+  assert.ok(!requests.some((r) => r.path === "/api/login"));
+  dom.window.close();
+});
+test("navegação compacta mantém menu administrativo e protege formulário alterado", async () => {
+  const { w, dom } = await ui({
+    logged: true,
+    role: "ADMIN",
+    url: "https://test.invalid/",
+  });
+  assert.ok(w.document.querySelector('.nav-more [data-page="users"]'));
+  w.document.querySelector('[data-page="batches"]').click();
+  await settle();
+  const input = w.document.querySelector('#create-batch input[name="name"]');
+  input.value = "Lote ainda não salvo";
+  input.dispatchEvent(new w.Event("input", { bubbles: true }));
+  w.confirm = () => false;
+  w.document.querySelector('[data-page="dashboard"]').click();
+  await settle();
+  assert.equal(
+    w.document.querySelector('#create-batch input[name="name"]').value,
+    "Lote ainda não salvo",
+  );
+  w.confirm = () => true;
+  w.document.querySelector('[data-page="dashboard"]').click();
+  await settle();
+  assert.match(w.document.body.textContent, /Visão geral/);
+  dom.window.close();
+});
+test("filtros de lote e prévia não confundem lote comercial com PDF de teste", async () => {
+  const { w, dom, submit } = await ui({
+    logged: true,
+    role: "ADMIN",
+    url: "https://test.invalid/",
+  });
+  w.document.querySelector('[data-page="batches"]').click();
+  await settle();
+  submit("#batch-filters", { q: "inexistente", kind: "", state: "" });
+  await settle();
+  assert.equal(w.document.querySelectorAll("[data-export]").length, 0);
+  w.document.querySelector("#clear-batches").click();
+  await settle();
+  w.document.querySelector("[data-export]").click();
+  await settle();
+  assert.match(w.document.body.textContent, /LOTE COMERCIAL/);
+  assert.ok(w.document.querySelector("#preview-print"));
+  assert.equal(
+    w.document.querySelector('button[value="production"]').disabled,
+    true,
+  );
+  dom.window.close();
 });
