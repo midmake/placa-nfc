@@ -39,12 +39,12 @@ jobs:
            try:
             r=opener.open(url,timeout=30); status=r.status; location=r.headers.get("Location","")
            except urllib.error.HTTPError as e:
-            status=e.code; location=e.headers.get("Location","")
+            status=e.code; location=e.headers.get("Location",""); error_response=e
            if status==403:
             import re
-            body=e.read().decode("utf-8",errors="replace")
+            body=error_response.read().decode("utf-8",errors="replace")
             title=re.search(r"<title>([^<]{0,160})</title>",body,re.I)
-            print("QR_DIAGNOSTIC",{"status":status,"mitigated":e.headers.get("cf-mitigated"),"title":title.group(1) if title else "none","server":e.headers.get("server")})
+            print("QR_DIAGNOSTIC",{"status":status,"mitigated":error_response.headers.get("cf-mitigated"),"title":title.group(1) if title else "none","server":error_response.headers.get("server")})
            valid=(status==200 if p["blocked"] else status==302 and (location.startswith("/?activate=") if p["status"]!="ACTIVE" else urllib.parse.urlparse(location).scheme=="https"))
            print("QR_SAMPLE",n+1,"OK" if valid else "FAILED","HTTP",status)
            assert valid, "QR route failed"
