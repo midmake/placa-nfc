@@ -10,7 +10,8 @@
   // Official HTTPS login and existing-plate QR confirmed by owner on 2026-10-06.
   "vars": {
     "PUBLIC_BASE_URL": "https://app.geargo.com.br",
-    "QR_PRODUCTION_READY": "true"
+    "QR_PRODUCTION_READY": "true",
+    "EMAIL_FROM": "Gear Go Digital <acesso@geargo.com.br>"
   },
   "assets": {
     "directory": "./public",
