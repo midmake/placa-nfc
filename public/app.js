@@ -87,11 +87,10 @@ function menu() {
   }
   const primary =
     me.role === "ADMIN"
-      ? ["dashboard", "batches", "establishments", "activate", "reviewLink"]
+      ? ["dashboard", "batches", "establishments", "activate"]
       : [
           "establishments",
           "activate",
-          "reviewLink",
           ...(me.commercial_type === "REVENDEDOR" ? ["balance"] : []),
         ];
   const secondary = [
@@ -105,7 +104,6 @@ function menu() {
     establishments: "Clientes",
     activate: "Ativar placa",
     balance: "Meu saldo",
-    reviewLink: "Gerar link de avaliação",
     plates: "Placas por vendedor",
     users: "Equipe GearGo",
     resellers: "Revendedores",
@@ -115,7 +113,7 @@ function menu() {
   };
   const item = (p) =>
     `<button data-page="${p}" ${p === page ? 'aria-current="page"' : ""} class="${p === page ? "selected" : ""}">${labels[p]}</button>`;
-  nav.innerHTML = `<div class="nav-primary">${primary.map(item).join("")}</div><details class="nav-more" ${secondary.includes(page) ? "open" : ""}><summary>Mais</summary><div>${secondary.map(item).join("")}</div></details>`;
+  nav.innerHTML = `<div class="nav-primary">${primary.map(item).join("")}<a class="button secondary" href="https://www.superchat.com/pt/tools/google-review-link-generator" target="_blank" rel="noopener noreferrer" title="Abra o gerador externo para criar o link direto de avaliação Google.">Gerador de links</a></div><details class="nav-more" ${secondary.includes(page) ? "open" : ""}><summary>Mais</summary><div>${secondary.map(item).join("")}</div></details>`;
   nav
     .querySelectorAll("button")
     .forEach(
@@ -143,15 +141,12 @@ async function go(p) {
     plates,
     establishments,
     batches,
-    reviewLink,
     users: () => people("", 0, "EQUIPE_GEAR"),
     resellers: () => people("", 0, "REVENDEDOR"),
     audit,
     activate: activationCode,
     password: passwordForm,
   }[p]();
-  if (p === "dashboard" || (p === "establishments" && me.role !== "ADMIN"))
-    mountReviewQuick();
 }
 function login() {
   document.body.classList.add("login-view");
@@ -208,7 +203,7 @@ const userOptions = (selected) =>
 const segmentList = () =>
   `<datalist id="segments">${categories.map((c) => `<option value="${esc(c.name)}"></option>`).join("")}</datalist>`;
 function fields(e = {}) {
-  return `<div class="grid"><label>Nome do estabelecimento<input name="name" value="${esc(e.name)}" required maxlength="160" autocomplete="organization"></label><label>Cidade<input name="city" value="${esc(e.city)}" required maxlength="100" autocomplete="off" data-suggest="city"></label><label>Segmento<input name="segment" value="${esc(e.segment)}" required maxlength="80" autocomplete="off" data-suggest="segment" placeholder="Toque ou digite para pesquisar"></label><label data-other-segment hidden>Qual segmento?<input name="segment_other" maxlength="80" disabled placeholder="Informe o segmento do estabelecimento"></label><label>Nome do responsável<input name="responsible" value="${esc(e.responsible)}" required maxlength="160" autocomplete="name"></label><label>Telefone / WhatsApp comercial<input name="phone" type="tel" value="${esc(e.phone)}" required maxlength="30" autocomplete="tel" placeholder="(51) 99999-9999"></label><label>Link de avaliação Google<input name="google_url" type="url" value="${esc(e.google_url)}" required maxlength="2048" placeholder="https://…"><button type="button" class="secondary" data-copy-field="google_url">Copiar link de avaliação</button><button type="button" class="secondary" data-generate-review>Converter link compartilhado</button></label></div><p class="hint">Informe dados comerciais que você esteja autorizado a fornecer. Usaremos esses dados para operar as placas e manter o histórico administrativo. <a href="/privacidade.html" target="_blank">Entenda o tratamento dos dados</a>.</p>`;
+  return `<div class="grid"><label>Nome do estabelecimento<input name="name" value="${esc(e.name)}" required maxlength="160" autocomplete="organization"></label><label>Cidade<input name="city" value="${esc(e.city)}" required maxlength="100" autocomplete="off" data-suggest="city"></label><label>Segmento<input name="segment" value="${esc(e.segment)}" required maxlength="80" autocomplete="off" data-suggest="segment" placeholder="Toque ou digite para pesquisar"></label><label data-other-segment hidden>Qual segmento?<input name="segment_other" maxlength="80" disabled placeholder="Informe o segmento do estabelecimento"></label><label>Nome do responsável<input name="responsible" value="${esc(e.responsible)}" required maxlength="160" autocomplete="name"></label><label>Telefone / WhatsApp comercial<input name="phone" type="tel" value="${esc(e.phone)}" required maxlength="30" autocomplete="tel" placeholder="(51) 99999-9999"></label><label>Link de avaliação Google<input name="google_url" type="url" value="${esc(e.google_url)}" required maxlength="2048" placeholder="https://…"><button type="button" class="secondary" data-copy-field="google_url">Copiar link de avaliação</button></label></div><p class="hint">Informe dados comerciais que você esteja autorizado a fornecer. Usaremos esses dados para operar as placas e manter o histórico administrativo. <a href="/privacidade.html" target="_blank">Entenda o tratamento dos dados</a>.</p>`;
 }
 async function userList() {
   users = await api("/users");

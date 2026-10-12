@@ -119,10 +119,6 @@ await page.route("**/api/**", async (route) => {
     };
   if (path === "/api/activation/verify")
     b = { grant: "fixture", code: "A0110-K7Q2" };
-  if (path === "/api/google-review-link")
-    b = {
-      url: "https://search.google.com/local/writereview?placeid=ChIJ3S-JXmauEmsRUcIaWtf4MzE",
-    };
   await route.fulfill({
     status,
     contentType: "application/json",
@@ -140,7 +136,6 @@ try {
     await page.waitForSelector("#quick-activate");
     for (const screen of [
       "dashboard",
-      "reviewLink",
       "activate",
       "batches",
       "establishments",

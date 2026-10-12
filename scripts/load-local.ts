@@ -12,13 +12,6 @@ const routes = [
   ["/api/search?q=test", "GET", undefined],
   ["/api/plates?batch_id=local", "GET", undefined],
   ["/r/A00001-" + "b".repeat(48), "GET", undefined],
-  [
-    "/api/google-review-link",
-    "POST",
-    {
-      url: "https://search.google.com/local/writereview?placeid=ChIJ3S-JXmauEmsRUcIaWtf4MzE",
-    },
-  ],
 ] as const;
 for (const rate of [10, 50, 100])
   for (const [path, method, data] of routes) {
