@@ -9,6 +9,7 @@ function accessEntry() {
   history.replaceState(null, "", "/"); // Keep secret only in this form's closure.
   document.body.classList.add("login-view");
   nav.innerHTML = "";
+  message("");
   app.innerHTML = `<section class="panel narrow"><img class="access-logo" src="/gear-go-oficial.png" alt="Gear Go Digital"><h1>${invite ? "Crie seu acesso" : "Redefina sua senha"}</h1><p>Escolha uma senha pessoal com pelo menos 12 caracteres.</p><form id="accept-access"><label>Senha<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><label>Confirme a senha<input name="confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><button class="full">${invite ? "Criar meu acesso" : "Salvar nova senha"}</button></form><button id="access-back" class="secondary full">Voltar ao login</button></section>`;
   on("accept-access", "submit", async (e) => {
     const b = values(e);
@@ -23,6 +24,7 @@ function accessEntry() {
   return true;
 }
 function forgotPassword() {
+  message("");
   app.innerHTML =
     '<section class="panel narrow"><h1>Recuperar acesso</h1><p>Informe seu e-mail. Se não receber as instruções, fale com o administrador.</p><form id="forgot-form"><label>E-mail<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button class="full">Solicitar recuperação</button></form><button id="forgot-back" class="secondary full">Voltar ao login</button></section>';
   on("forgot-form", "submit", async (e) => {
@@ -78,6 +80,7 @@ function accessLink(result) {
 }
 async function people(q = "", offset = 0, type = "") {
   const data = await api("/people?" + new URLSearchParams({ q, offset, type }));
+  message("");
   app.innerHTML = `<h1>${type === "EQUIPE_GEAR" ? "Equipe GearGo" : type === "REVENDEDOR" ? "Revendedores" : "Usuários"}</h1><details class="panel create-section"><summary>Convidar usuário</summary><p class="hint">${data.email_ready ? "E-mail automático: configurado. O convite pessoal será enviado por e-mail." : "E-mail automático: não configurado. Copie o link pessoal e envie manualmente ao usuário."}</p><form id="invite-user"><div class="grid"><label>Nome<input name="name" maxlength="160" required></label><label>E-mail<input name="email" type="email" maxlength="254" required></label><label>Tipo<select name="commercial_type">${type !== "REVENDEDOR" ? '<option value="EQUIPE_GEAR">Equipe GearGo</option>' : ""}${type !== "EQUIPE_GEAR" ? '<option value="REVENDEDOR">Revendedor</option>' : ""}</select></label></div><button>Convidar usuário</button></form></details><div id="access-result" aria-live="polite"></div><form id="people-search" class="search"><label>Nome ou e-mail<input name="q" value="${esc(q)}"></label><button>Buscar</button></form><div class="grid">${
     data.users
       .map((u) => {
@@ -147,6 +150,7 @@ async function balances(userId = me.id) {
         (b) => !b.archived_at && b.generation_state === "READY",
       )
     : [];
+  message("");
   app.innerHTML = `<h1>Unidades de revenda</h1><div class="stats"><article class="card">Compradas <strong>${sums.quantity}</strong></article><article class="card">Ativadas <strong>${sums.consumed}</strong></article><article class="card">Disponíveis <strong>${sums.available}</strong></article></div>${isAdmin ? `<section class="panel"><h2>Atribuir unidades</h2><form id="allocate"><label>Produto<select name="product"><option value="GOOGLE">Google Reviews</option></select></label><label>Lote<select name="batch_id" required>${lots.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}${b.is_test ? " · TESTE" : ""}</option>`).join("")}</select></label><label>Quantidade<input type="number" name="quantity" min="1" max="5000" value="20" required></label><button>Atribuir unidades</button></form></section>` : '<p>O saldo vale para o produto e lote indicado. Ative usando o código da placa física.</p><button id="balance-activate">Ativar placa</button>'}${rows.map((a) => `<article class="card"><h2>${esc(a.batch_name)} ${a.is_test ? "· TESTE" : ""}</h2><p>Google Reviews · Compradas ${a.quantity} · Ativadas ${a.consumed} · Disponíveis ${a.available}</p>${a.archived_at ? '<p class="hint">Lote arquivado: fale com o administrador.</p>' : ""}</article>`).join("") || '<p class="empty">Nenhuma alocação cadastrada.</p>'}<button id="balance-back" class="secondary">Voltar</button>`;
   const requestKey = crypto.randomUUID();
   on("allocate", "submit", async (e) => {
@@ -163,7 +167,9 @@ async function balances(userId = me.id) {
     message("Unidades atribuídas.");
   });
   on("balance-activate", "click", () => go("activate"));
-  on("balance-back", "click", () => go(isAdmin ? "resellers" : "establishments"));
+  on("balance-back", "click", () =>
+    go(isAdmin ? "resellers" : "establishments"),
+  );
 }
 async function dashboard() {
   const d = await api("/dashboard"),
@@ -176,6 +182,7 @@ async function dashboard() {
       invitations: "Convites pendentes",
       month_activations: "Ativações neste mês",
     };
+  message("");
   app.innerHTML = `<h1>Visão geral</h1><p>Olá, ${esc(me.name)}.</p><div class="quick-actions"><button id="quick-activate">Ativar placa</button><button id="quick-people" class="secondary">Equipe GearGo</button><button id="quick-resellers" class="secondary">Revendedores</button></div><div class="stats">${Object.entries(
     labels,
   )
@@ -238,6 +245,7 @@ function bindTrace() {
 }
 async function tracePlate(id) {
   const p = await api(`/plates/${id}/trace`);
+  message("");
   app.innerHTML = `<section class="panel"><h1>${esc(plateLabel(p))}</h1><dl>${Object.entries(
     {
       Lote: p.batch_name,

@@ -6,8 +6,15 @@ import {
   verifyPassword,
 } from "./security";
 import { parseGoogleURL } from "./google-url";
+import { SEGMENTS } from "./segments";
 import { operations, redirectPlate } from "./operations";
-import { professional, publicAccounts } from "./professional";
+import {
+  professional,
+  publicAccounts,
+  throttle,
+  reauthenticate,
+} from "./professional";
+import { generateReviewLink } from "./google-review-link";
 import {
   type Env,
   type User,
@@ -51,6 +58,20 @@ async function route(
     return env.ASSETS.fetch(new Request(asset, { method: "GET" }));
   }
   if (!path.startsWith("/api/")) return env.ASSETS.fetch(req);
+  for (const name of ["after", "before", "offset"]) {
+    const raw = url.searchParams.get(name);
+    if (
+      raw !== null &&
+      raw !== "" &&
+      (name !== "after" || path !== "/api/search")
+    ) {
+      const n = Number(raw);
+      if (!Number.isSafeInteger(n) || n < 0 || (name === "offset" && n > 10000))
+        fail(400, "Paginação inválida.");
+    }
+  }
+  if ([...url.searchParams.values()].some((v) => v.length > 2048))
+    fail(400, "Consulta muito longa.");
   if (!["GET", "HEAD"].includes(method)) {
     if (req.headers.get("origin") !== url.origin)
       fail(403, "Origem inválida. Atualize a página e tente novamente.");
@@ -97,6 +118,13 @@ async function route(
     return res;
   }
   const user = await current(req, db);
+  await throttle(
+    req,
+    env,
+    method === "GET" ? "api-read" : "api-write",
+    user.id,
+    method === "GET" ? 600 : 180,
+  );
   if (path === "/api/me" && method === "GET") return json(user);
   if (path === "/api/logout" && method === "POST") {
     await db
@@ -108,6 +136,7 @@ async function route(
     return res;
   }
   if (path === "/api/password" && method === "POST") {
+    await throttle(req, env, "password-change", user.id, 8);
     const b = await body(req);
     if (!validPassword(b.password))
       fail(400, "Use uma senha de 12 a 128 caracteres.");
@@ -153,14 +182,51 @@ async function route(
   }
   if (user.must_change_password)
     fail(403, "Troque sua senha temporária antes de continuar.");
+  if (path === "/api/google-review-link" && method === "POST") {
+    await throttle(req, env, "google-review-link", user.id, 20);
+    const b = await body(req);
+    try {
+      return json(await generateReviewLink(b.url));
+    } catch (e) {
+      return fail(
+        400,
+        e instanceof Error && e.name !== "TimeoutError"
+          ? e.message
+          : "Tempo esgotado. Cole o link completo do Google.",
+      );
+    }
+  }
+  if (path === "/api/cities" && method === "GET") {
+    const rows = (
+      await db
+        .prepare(
+          "SELECT MIN(city) AS city FROM establishments WHERE archived_at IS NULL AND (?='ADMIN' OR owner_id=?) GROUP BY city_key ORDER BY city_key LIMIT 500",
+        )
+        .bind(user.role, user.id)
+        .all<{ city: string }>()
+    ).results;
+    return json([
+      ...new Map(rows.map((r) => [key(r.city), r.city.trim()])).values(),
+    ]);
+  }
   const pro = await professional(req, env, user);
   if (pro) return pro;
   const operational = await operations(req, env, user);
   if (operational) return operational;
   if (path === "/api/categories" && method === "GET")
     return json(
-      (await db.prepare("SELECT name FROM categories ORDER BY name").all())
-        .results,
+      [
+        ...new Set([
+          ...SEGMENTS,
+          ...(
+            await db
+              .prepare("SELECT name FROM categories ORDER BY name")
+              .all<{ name: string }>()
+          ).results.map((c) => c.name),
+        ]),
+      ]
+        .sort((a, b) => a.localeCompare(b, "pt-BR"))
+        .map((name) => ({ name })),
     );
   if (path === "/api/categories" && method === "POST") {
     admin(user);
@@ -186,6 +252,7 @@ async function route(
   }
   if (path === "/api/users" && method === "POST") {
     admin(user);
+    await throttle(req, env, "legacy-user-create", user.id, 20);
     const b = await body(req),
       name = text(b.name, "Nome"),
       email = text(b.email, "E-mail", 254).toLowerCase();
@@ -217,6 +284,7 @@ async function route(
   let match = path.match(/^\/api\/users\/([^/]+)\/reset-password$/);
   if (match && method === "POST") {
     admin(user);
+    await reauthenticate(req, env, user, await body(req));
     const id = match[1];
     const target = await db
       .prepare("SELECT id FROM users WHERE id=?")
@@ -303,8 +371,14 @@ async function route(
         409,
         "Este estabelecimento foi alterado. Reabra a tela antes de salvar.",
       );
-    const input = await establishmentInput(b, env);
+    const input = await establishmentInput(
+      { ...b, address: b.address === undefined ? e.address : b.address },
+      env,
+    );
     await mutate(db, [
+      db
+        .prepare("INSERT OR IGNORE INTO categories(name) VALUES(?)")
+        .bind(input.segment),
       db
         .prepare(
           "UPDATE establishments SET name=?,city=?,segment=?,responsible=?,phone=?,phone_normalized=?,google_url=?,name_key=?,city_key=?,address=?,version=version+1,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND version=?",

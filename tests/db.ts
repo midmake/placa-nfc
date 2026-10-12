@@ -29,6 +29,7 @@ export class TestDB {
     const db = this;
     let params: any[] = [];
     const p = {
+      _query: query,
       bind(...args: any[]) {
         params = args;
         return p;

@@ -2,7 +2,7 @@ function contactActions(e) {
   const digits = String(e.phone || "").replace(/\D/g, "");
   const number =
     digits.length === 10 || digits.length === 11 ? "55" + digits : digits;
-  return `<div class="actions"><button type="button" class="secondary" data-copy="${esc(e.phone || "")}">Copiar telefone</button>${/^55[0-9]{10,11}$/.test(number) ? `<a class="button secondary" href="https://wa.me/${number}" target="_blank" rel="noopener noreferrer">WhatsApp</a>` : ""}<a class="button secondary" href="${esc(e.google_url)}" target="_blank" rel="noopener noreferrer">Abrir destino Google</a></div>`;
+  return `<div class="actions"><button type="button" class="secondary" data-copy="${esc(e.phone || "")}">Copiar telefone</button>${/^55[0-9]{10,11}$/.test(number) ? `<a class="button secondary" href="https://wa.me/${number}" target="_blank" rel="noopener noreferrer">WhatsApp</a>` : ""}<a class="button secondary" href="${esc(e.google_url)}" target="_blank" rel="noopener noreferrer">Abrir destino Google</a><button type="button" class="secondary" data-copy="${esc(e.google_url)}">Copiar link de avaliação</button></div>`;
 }
 // Operational screens share authentication, forms and error handling from app.js.
 function onMatch(button, fn) {
@@ -22,6 +22,7 @@ async function activationCode(establishmentId = null) {
   page = "activate";
   menu();
   const qr = pendingQR();
+  message("");
   app.innerHTML = `<section class="panel narrow"><p class="eyebrow">ATIVAÇÃO DE PLACA</p><h1>Confirme o código físico</h1><p class="muted">${qr ? "Você escaneou uma placa. Digite o código impresso nela para continuar." : "Pegue a placa que deseja preparar e digite o código impresso."}</p><form id="verify-code"><label>Código da placa<input name="code" class="physical-code" placeholder="A3009-K7Q2" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" required aria-describedby="code-help"></label><p id="code-help" class="hint">Pode digitar com ou sem hífen. Use o código da mesma placa que você escaneou.</p><button class="full">Continuar</button></form><p class="hint">A placa só ficará vinculada a você ao concluir o cadastro.</p><button id="cancel-code" class="secondary full">Cancelar</button></section>`;
   const codeInput = document.querySelector('#verify-code [name="code"]');
   codeInput.addEventListener("input", () => message(""));
@@ -43,7 +44,8 @@ async function activation(proof, establishmentId = null) {
     (e) =>
       e.owner_id === me.id && Boolean(e.is_test) === Boolean(proof.is_test),
   );
-  app.innerHTML = `<h1>Ativar ${esc(proof.code)}</h1>${proof.is_test ? '<p class="hint">PLACA DE TESTE · Cadastre somente dados fictícios.</p>' : ""}<p class="muted">Confirmação válida por 15 minutos. Nenhuma placa foi reservada.</p><section class="panel"><h2>Vincular a um cliente existente</h2><form id="link-existing"><label>Estabelecimento<select name="establishment_id" required><option value="">Selecione</option>${existing.map((e) => `<option value="${esc(e.id)}" ${e.id === establishmentId ? "selected" : ""}>${esc(e.name)} · ${esc(e.city)}</option>`).join("")}</select></label><button ${existing.length ? "" : "disabled"}>Concluir ativação</button></form></section><section class="panel"><h2>Cadastrar novo cliente</h2><form id="activate-form">${fields()}<label>Endereço comercial (opcional)<input name="address" maxlength="240" autocomplete="street-address"></label><div id="matches"></div><div class="actions"><button>Concluir ativação</button><button type="button" id="cancel-activation" class="secondary">Cancelar</button></div></form></section>`;
+  message("");
+  app.innerHTML = `<h1>Ativar ${esc(proof.code)}</h1>${proof.is_test ? '<p class="hint">PLACA DE TESTE · Cadastre somente dados fictícios.</p>' : ""}<p class="muted">Confirmação válida por 15 minutos. Nenhuma placa foi reservada.</p><section class="panel"><h2>Vincular a um cliente existente</h2><form id="link-existing"><label>Estabelecimento<select name="establishment_id" required><option value="">Selecione</option>${existing.map((e) => `<option value="${esc(e.id)}" ${e.id === establishmentId ? "selected" : ""}>${esc(e.name)} · ${esc(e.city)}</option>`).join("")}</select></label><button ${existing.length ? "" : "disabled"}>Concluir ativação</button></form></section><section class="panel"><h2>Cadastrar novo cliente</h2><form id="activate-form">${fields()}<div id="matches"></div><div class="actions"><button>Concluir ativação</button><button type="button" id="cancel-activation" class="secondary">Cancelar</button></div></form></section>`;
   const finish = async (b) => {
     const r = await api("/activation/complete", "POST", {
       ...b,
@@ -85,12 +87,12 @@ function bindEst() {
     .forEach((b) => onMatch(b, () => estDetail(b.dataset.est)));
 }
 function plateCard(p) {
-  return `<article class="plate-line"><div><strong class="code-label">${esc(plateLabel(p))}</strong> <span class="badge ${p.blocked ? "blocked" : p.status.toLowerCase()}">${plateStatus(p)}</span><p>${esc(p.establishment_name || "Ainda não ativada")}<br><small>${esc(p.batch_name || "")}</small></p></div><div class="actions"><button type="button" class="secondary" data-copy="${esc(plateLabel(p))}">Copiar código</button><button type="button" class="secondary" data-copy="${esc(p.qr_url)}">Copiar link</button><button class="secondary" data-trace="${p.id}">Detalhes</button>${p.establishment_id ? `<button data-est="${esc(p.establishment_id)}">Cliente</button>` : ""}<a class="button secondary" href="${esc(p.qr_url)}" target="_blank" rel="noopener">Testar QR</a>${me.role === "ADMIN" ? `<button class="secondary" data-block="${p.id}" data-next="${p.blocked ? "false" : "true"}">${p.blocked ? "Desbloquear" : "Bloquear"}</button>${p.status !== "ACTIVE" ? `<button class="secondary" data-assign="${p.id}">Atribuir</button>` : ""}` : ""}</div></article>`;
+  return `<article class="plate-line"><div><strong class="code-label">${esc(plateLabel(p))}</strong> <span class="badge ${p.blocked ? "blocked" : p.status.toLowerCase()}">${plateStatus(p)}</span><p>${esc(p.establishment_name || "Ainda não ativada")}<br><small>${esc(p.batch_name || "")}</small></p></div><div class="actions"><button type="button" class="secondary" data-copy="${esc(plateLabel(p))}">Copiar código</button><button type="button" class="secondary" data-copy="${esc(p.qr_url)}">Copiar link da placa para NFC</button><button class="secondary" data-trace="${p.id}">Detalhes</button>${p.establishment_id ? `<button data-est="${esc(p.establishment_id)}">Cliente</button>` : ""}<a class="button secondary" href="${esc(p.qr_url)}" target="_blank" rel="noopener">Testar QR</a>${me.role === "ADMIN" ? `<button class="secondary" data-block="${p.id}" data-next="${p.blocked ? "false" : "true"}">${p.blocked ? "Desbloquear" : "Bloquear"}</button>${p.status !== "ACTIVE" ? `<button class="secondary" data-assign="${p.id}">Atribuir</button>` : ""}` : ""}</div></article>`;
 }
-function bindPlateActions(refresh) {
+function bindPlateActions(refresh, root = app) {
   bindEst();
   bindTrace();
-  app.querySelectorAll("[data-block]").forEach((btn) =>
+  root.querySelectorAll("[data-block]").forEach((btn) =>
     onMatch(btn, async () => {
       const blocked = btn.dataset.next === "true";
       if (
@@ -104,7 +106,7 @@ function bindPlateActions(refresh) {
       message("Status da placa atualizado.");
     }),
   );
-  app
+  root
     .querySelectorAll("[data-assign]")
     .forEach((btn) =>
       onMatch(btn, () => assignment("plates", btn.dataset.assign)),
@@ -113,6 +115,7 @@ function bindPlateActions(refresh) {
 async function plates(q = "") {
   if (me.role !== "ADMIN") return establishments();
   const groups = await api("/plate-groups?q=" + encodeURIComponent(q));
+  message("");
   app.innerHTML = `<h1>Placas por vendedor</h1><p class="muted">Placas ativas e atribuições administrativas. Para unidades sem vendedor, use Lotes.</p><form id="plate-search" class="search"><label>Buscar código, vendedor, estabelecimento ou lote<input name="q" value="${esc(q)}"></label><button>Buscar</button></form><div id="groups">${groups.map((g) => `<details class="panel seller-group" data-seller="${esc(g.id)}"><summary><strong>${esc(g.name)}</strong><span>${g.quantity} placa(s) · ${g.activated} ativada(s) · ${g.blocked} bloqueada(s)</span></summary><div class="actions"><button class="secondary" data-bulk="${esc(g.id)}" data-next="true">Bloquear placas do vendedor</button><button class="secondary" data-bulk="${esc(g.id)}" data-next="false">Desbloquear placas do vendedor</button></div><div id="seller-${esc(g.id)}"></div></details>`).join("") || '<section class="panel empty">Nenhuma placa vinculada a vendedores nesta busca.</section>'}</div>${q ? '<section class="panel"><h2>Resultados por placa</h2><div id="search-plates"></div></section>' : ""}`;
   on("plate-search", "submit", (e) => plates(values(e).q));
   for (const d of app.querySelectorAll("[data-seller]"))
@@ -154,7 +157,30 @@ async function loadPlatePage(container, filters, after = "") {
     r.plates.map(plateCard).join("") ||
     '<p class="muted">Nenhuma placa encontrada.</p>';
   container.append(section);
-  bindPlateActions(() => plates(filters.q || ""));
+  if (filters.batch_id && r.counts) {
+    container
+      .closest(".batch-card")
+      ?.querySelectorAll("[data-lot-status]")
+      .forEach((button) => {
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.lotStatus === (filters.status || "ALL")),
+        );
+        const key = {
+          ALL: "total",
+          ACTIVE: "active",
+          INACTIVE: "inactive",
+          BLOCKED: "blocked",
+        }[button.dataset.lotStatus];
+        button.querySelector("strong").textContent =
+          r.counts[key].toLocaleString("pt-BR");
+      });
+  }
+  bindPlateActions(async () => {
+    if (!filters.batch_id) return plates(filters.q || "");
+    container.replaceChildren();
+    await loadPlatePage(container, filters);
+  }, container);
   if (r.next_after) {
     const btn = document.createElement("button");
     btn.textContent = "Carregar mais";
@@ -168,6 +194,7 @@ async function loadPlatePage(container, filters, after = "") {
 }
 async function establishments(params = {}) {
   const rows = await api("/establishments?" + new URLSearchParams(params));
+  message("");
   app.innerHTML = `<div class="row"><div><p class="eyebrow">${me.role === "ADMIN" ? "BASE COMERCIAL" : "SUA OPERAÇÃO"}</p><h1>${me.role === "ADMIN" ? "Estabelecimentos" : "Meus clientes"}</h1></div><button id="new-activation">Ativar placa</button></div><form id="filters" class="search"><label>Nome, telefone ou código<input name="q" value="${esc(params.q)}"></label><label>Cidade<input name="city" value="${esc(params.city)}"></label><label>Segmento<input name="segment" list="segments" value="${esc(params.segment)}">${segmentList()}</label><button>Filtrar</button></form><div class="grid">${
     rows
       .map(
@@ -181,7 +208,7 @@ async function establishments(params = {}) {
             )
             .join(
               "",
-            )}</div><p class="hint">Placas vinculadas: ${e.plate_count}</p><button data-est="${esc(e.id)}">Abrir cliente</button></article>`,
+            )}</div><p class="hint">Placas vinculadas: ${e.plate_count}</p><button data-est="${esc(e.id)}">Editar cliente / link</button></article>`,
       )
       .join("") ||
     '<section class="panel empty">Seus clientes aparecerão aqui depois da primeira ativação.</section>'
@@ -212,7 +239,8 @@ async function establishments(params = {}) {
 async function estDetail(id) {
   document.body.classList.remove("login-view");
   const e = await api("/establishments/" + id);
-  app.innerHTML = `<h1>${esc(e.name)}${e.is_test ? " · TESTE" : ""}${e.archived_at ? " · ARQUIVADO" : ""}</h1>${me.role === "ADMIN" ? `<div class="actions"><button id="archive-client" class="danger">Arquivar</button>${e.is_test ? '<button id="delete-client" class="danger">Excluir teste sem placas</button>' : ""}</div>` : ""}<p class="muted">Placas vinculadas: ${e.plates.length}</p>${contactActions(e)}<section class="panel"><form id="edit-est">${fields(e)}<label>Endereço comercial (opcional)<input name="address" value="${esc(e.address)}" maxlength="240"></label><p class="hint">Alterar o link atualiza todas as placas deste estabelecimento. Bloqueios continuam sendo respeitados e o histórico é preservado.</p><div class="actions"><button>Salvar alterações</button><button type="button" id="back-est" class="secondary">Voltar</button></div></form></section><section class="panel"><h2>Placas vinculadas</h2>${e.plates.map(plateCard).join("")}<div class="actions">${e.owner_id === me.id ? '<button id="link-more">+ Vincular outra placa</button>' : ""}${me.role === "ADMIN" ? '<button id="est-history" class="secondary">Histórico do estabelecimento</button>' : ""}</div></section>`;
+  message("");
+  app.innerHTML = `<h1>${esc(e.name)}${e.is_test ? " · TESTE" : ""}${e.archived_at ? " · ARQUIVADO" : ""}</h1>${me.role === "ADMIN" ? `<div class="actions"><button id="archive-client" class="danger">Arquivar</button>${e.is_test ? '<button id="delete-client" class="danger">Excluir teste sem placas</button>' : ""}</div>` : ""}<p class="muted">Placas vinculadas: ${e.plates.length}</p>${contactActions(e)}<section class="panel"><h2>Editar cliente e link de avaliação</h2><form id="edit-est">${fields(e)}<p class="hint">Alterar o link atualiza todas as placas deste estabelecimento. Bloqueios continuam sendo respeitados e o histórico é preservado.</p><div class="actions"><button>Salvar alterações</button><button type="button" id="back-est" class="secondary">Voltar</button></div></form></section><section class="panel"><h2>Placas vinculadas</h2><p class="hint">Para gravar o NFC, copie o link da placa abaixo: ele permanece o mesmo quando o destino Google é editado.</p>${e.plates.map(plateCard).join("")}<div class="actions">${e.owner_id === me.id ? '<button id="link-more">+ Vincular outra placa</button>' : ""}${me.role === "ADMIN" ? '<button id="est-history" class="secondary">Histórico do estabelecimento</button>' : ""}</div></section>`;
   on("archive-client", "click", () =>
     removeRecord("establishments", id, e.name, "archive"),
   );
@@ -245,6 +273,7 @@ async function batches(filters = {}) {
       (!["active", "inactive", "blocked"].includes(filters.state) ||
         b[filters.state] > 0),
   );
+  message("");
   app.innerHTML = `<div class="row"><div><p class="eyebrow">PRODUÇÃO & OPERAÇÃO</p><h1>Lotes de placas</h1></div><span class="muted">${rows.length} lote(s)</span></div><details class="panel create-section"><summary>Criar novo lote</summary><form id="create-batch"><div class="grid"><label>Nome do lote<input name="name" required maxlength="100" placeholder="Lote A3009"></label><label>Quantidade<input type="number" name="quantity" min="1" max="5000" value="50" required></label></div><label class="check-label"><input name="is_test" type="checkbox"> Lote de teste (usar apenas dados fictícios)</label><p class="hint">Cada unidade gerada representa uma placa física. Elas nascem sem vendedor.</p><button>Gerar placas</button></form></details><form id="batch-filters" class="search"><label>Buscar lote<input name="q" value="${esc(filters.q)}" placeholder="Nome ou prefixo"></label><label>Finalidade<select name="kind"><option value="">Todos</option><option value="real" ${filters.kind === "real" ? "selected" : ""}>Comerciais</option><option value="test" ${filters.kind === "test" ? "selected" : ""}>Teste</option></select></label><label>Situação<select name="state">${[
     ["", "Em operação"],
     ["active", "Com placas ativas"],
@@ -258,7 +287,26 @@ async function batches(filters = {}) {
     )
     .join(
       "",
-    )}</select></label><button>Filtrar</button><button type="button" id="clear-batches" class="secondary">Limpar</button></form><div id="generation-progress" role="status"></div>${rows.map((b) => `<article class="panel batch-card"><div class="row"><h2>${esc(b.name)}${b.is_test ? " · TESTE" : ""}${b.archived_at ? " · ARQUIVADO" : ""}</h2><small>${esc(new Date(b.created_at).toLocaleDateString("pt-BR"))}</small></div><div class="lot-counts"><div><span>Total gerado</span><strong>${b.quantity.toLocaleString("pt-BR")}</strong></div><div><span>Ativas</span><strong>${b.active.toLocaleString("pt-BR")}</strong></div><div><span>Inativas</span><strong>${b.inactive.toLocaleString("pt-BR")}</strong></div><div><span>Bloqueadas</span><strong>${b.blocked.toLocaleString("pt-BR")}</strong></div></div>${b.generation_state !== "READY" ? `<p>Geração em andamento: ${b.quantity} / ${b.target_quantity}</p>` : ""}${b.pending_codes ? `<p class="hint">${b.pending_codes} placa(s) antiga(s) precisam receber o novo código físico. As URLs atuais não serão alteradas.</p>` : ""}<div class="actions">${b.generation_state !== "READY" || b.pending_codes ? `<button data-generate="${esc(b.id)}">${b.pending_codes ? "Preparar códigos físicos" : "Continuar geração"}</button>` : `<button data-export="${esc(b.id)}">Gerar arte para gráfica</button>`}<button class="secondary" data-inspect="${esc(b.id)}">Ver placas</button></div><details><summary>Administrar lote</summary>${!b.archived_at ? `<button class="danger" data-archive-batch="${esc(b.id)}">Arquivar</button>` : ""}${b.is_test ? `<button class="danger" data-delete-batch="${esc(b.id)}">Excluir teste</button>` : ""}<button class="secondary" data-assign-batch="${esc(b.id)}">Atribuir placas inativas a um vendedor</button></details><div id="batch-${esc(b.id)}"></div></article>`).join("") || '<p class="empty">Nenhum lote criado.</p>'}<details class="counts-help"><summary>Como ler as quantidades</summary><p class="hint">Ativas + inativas + bloqueadas = total gerado. Bloqueadas formam uma categoria separada, mesmo quando já ativadas. Sem bloqueio, placas reservadas contam como inativas.</p></details>`;
+    )}</select></label><button>Filtrar</button><button type="button" id="clear-batches" class="secondary">Limpar</button></form><div id="generation-progress" role="status"></div>${
+    rows
+      .map(
+        (b) =>
+          `<article class="panel batch-card"><div class="row"><h2>${esc(b.name)}${b.is_test ? " · TESTE" : ""}${b.archived_at ? " · ARQUIVADO" : ""}</h2><small>${esc(new Date(b.created_at).toLocaleDateString("pt-BR"))}</small></div><div class="lot-counts">${[
+            ["ALL", "Total gerado", b.quantity],
+            ["ACTIVE", "Ativas", b.active],
+            ["INACTIVE", "Inativas", b.inactive],
+            ["BLOCKED", "Bloqueadas", b.blocked],
+          ]
+            .map(
+              ([state, label, count]) =>
+                `<button type="button" data-lot="${esc(b.id)}" data-lot-status="${state}" aria-pressed="${state === "ALL"}"><span>${label}</span><strong>${count.toLocaleString("pt-BR")}</strong></button>`,
+            )
+            .join(
+              "",
+            )}</div>${b.generation_state !== "READY" ? `<p>Geração em andamento: ${b.quantity} / ${b.target_quantity}</p>` : ""}${b.pending_codes ? `<p class="hint">${b.pending_codes} placa(s) antiga(s) precisam receber o novo código físico. As URLs atuais não serão alteradas.</p>` : ""}<div class="actions">${b.generation_state !== "READY" || b.pending_codes ? `<button data-generate="${esc(b.id)}">${b.pending_codes ? "Preparar códigos físicos" : "Continuar geração"}</button>` : `<button data-export="${esc(b.id)}">Gerar arte para gráfica</button>`}<button class="secondary" data-inspect="${esc(b.id)}">Ver placas</button></div><details><summary>Administrar lote</summary>${!b.archived_at ? `<button class="danger" data-archive-batch="${esc(b.id)}">Arquivar</button>` : ""}${b.is_test ? `<button class="danger" data-delete-batch="${esc(b.id)}">Excluir teste</button>` : ""}<button class="secondary" data-assign-batch="${esc(b.id)}">Atribuir placas inativas a um vendedor</button></details><div id="batch-${esc(b.id)}"></div></article>`,
+      )
+      .join("") || '<p class="empty">Nenhum lote criado.</p>'
+  }<details class="counts-help"><summary>Como ler as quantidades</summary><p class="hint">Ativas + inativas + bloqueadas = total gerado. Bloqueadas formam uma categoria separada, mesmo quando já ativadas. Sem bloqueio, placas reservadas contam como inativas.</p></details>`;
   app
     .querySelectorAll("[data-archive-batch],[data-delete-batch]")
     .forEach((btn) =>
@@ -292,6 +340,16 @@ async function batches(filters = {}) {
     .forEach((btn) =>
       onMatch(btn, () => continueGeneration(btn.dataset.generate)),
     );
+  app.querySelectorAll("[data-lot-status]").forEach((btn) =>
+    onMatch(btn, async () => {
+      const el = document.getElementById("batch-" + btn.dataset.lot);
+      el.replaceChildren();
+      await loadPlatePage(el, {
+        batch_id: btn.dataset.lot,
+        status: btn.dataset.lotStatus,
+      });
+    }),
+  );
   app.querySelectorAll("[data-inspect]").forEach((btn) =>
     onMatch(btn, async () => {
       const el = document.getElementById("batch-" + btn.dataset.inspect);
@@ -323,6 +381,7 @@ async function continueGeneration(id) {
   message("Lote pronto. Códigos físicos e URLs gerados.");
 }
 function assignment(type, id) {
+  message("");
   app.innerHTML = `<section class="panel narrow"><h1>Atribuição administrativa</h1><p>Reserva excepcional de ${type === "batches" ? "placas ainda inativas do lote" : "uma placa inativa"}. Não cria estoque no painel do vendedor.</p><form id="assign"><label>Vendedor<select name="owner_id" required><option value="">Selecione</option>${userOptions()}</select></label><div class="actions"><button>Confirmar atribuição</button><button type="button" id="cancel-assign" class="secondary">Cancelar</button></div></form></section>`;
   on("assign", "submit", async (e) => {
     const r = await api(`/${type}/${id}/assign`, "POST", values(e));
@@ -339,6 +398,7 @@ async function printScreen(batch) {
     ).json();
   const commercialReady = config.production_ready && !batch.is_test;
   let originConfirmed = batch.production_origin === config.origin;
+  message("");
   app.innerHTML = `<section class="panel"><p class="eyebrow">PRODUÇÃO DE PLACAS</p><h1>Gerar arte para gráfica</h1><h2>${esc(batch.name)}</h2><p class="badge">${batch.is_test ? "LOTE DE TESTE" : "LOTE COMERCIAL"}</p><div class="lot-counts"><div><span>Placas no lote</span><strong>${batch.quantity.toLocaleString("pt-BR")}</strong></div><div><span>Prefixo do lote</span><strong class="code-label">${esc(batch.physical_prefix || "—")}</strong></div><div><span>Arquivos PDF</span><strong>${Math.ceil(batch.quantity / 250)}</strong></div></div><p class="wrap">Origem dos QRs: <strong>${esc(config.origin)}</strong></p><p class="hint">Baixar novamente monta o PDF no seu dispositivo usando as mesmas placas, códigos e URLs deste lote. Não cria novas placas nem altera os QRs. Os PDFs não ficam armazenados na plataforma.</p><form id="print-form"><label>Template<select name="template">${templates.map((t) => `<option value="${esc(t.id)}" ${t.ready ? "" : "disabled"}>${esc(t.name)}${t.ready ? "" : " · arte pendente"}</option>`).join("")}</select></label><p class="hint" id="production-status">${batch.is_test ? "Este lote foi criado para teste e não pode ser comercializado." : config.production_ready ? "Domínio oficial liberado para produção. A origem é confirmada uma única vez por lote." : "O domínio oficial ainda não foi validado. O PDF comercial será liberado após a configuração do domínio."}</p><button type="button" id="preview-print" class="secondary">Prévia de uma placa</button><div id="preview-download"></div><p class="print-test-note"><strong>PDF DE TESTE</strong> — contém identificação de teste. Não enviar à gráfica nem comercializar.</p><div class="actions"><button name="mode" value="test">Gerar PDF DE TESTE</button><button name="mode" value="production" aria-describedby="production-status" ${commercialReady ? "" : "disabled"}>${originConfirmed ? "Baixar PDF final — mesmos QRs" : "PDF FINAL PARA GRÁFICA"}</button></div><details><summary>Exportação CSV</summary><label>Finalidade do CSV<select name="csv-mode"><option value="test">Teste — não comercializar</option><option value="production" ${commercialReady ? "" : "disabled"}>Produção — domínio oficial</option></select></label><button type="button" id="csv" class="secondary">Baixar CSV</button></details><button type="button" id="cancel-print" class="secondary">Voltar aos lotes</button></form><div id="pdf-state" role="status" aria-live="polite"></div><div id="pdf-downloads"></div><p class="hint">Arte Oficial azul aprovada: corte de 100 × 100 mm, documento de 106 × 106 mm e sangria de 3 mm. QR vetorial único e código físico existente de cada placa, nas posições aprovadas. Uma placa por página, até 250 páginas por arquivo. Baixe todas as partes; um lote de 1.000 placas gera 4 PDFs.</p></section>`;
   on("preview-print", "click", async () => {
     const selected = templates.find((t) => t.id === opts().template);
@@ -369,7 +429,8 @@ async function printScreen(batch) {
       });
       originConfirmed = true;
       batch.production_origin = config.origin;
-      document.querySelector('button[value="production"]').textContent = "Baixar PDF final — mesmos QRs";
+      document.querySelector('button[value="production"]').textContent =
+        "Baixar PDF final — mesmos QRs";
     } else if (
       !confirm(
         "EXPORTAÇÃO DE TESTE. Não envie à gráfica nem venda placas com estas URLs temporárias. Continuar?",

@@ -48,6 +48,12 @@ export async function throttle(
       ).bind(k, now + 900000, now, now, now + 900000),
     ),
   );
+  // Bounded cleanup also runs on denied attempts. Never touches business records.
+  await env.DB.prepare(
+    "DELETE FROM login_limits WHERE key IN (SELECT key FROM login_limits WHERE reset_at<? LIMIT 100)",
+  )
+    .bind(now - 900000)
+    .run();
   if (
     result.some(
       (r, i) => Number((r.results[0] as Row).attempts) > (i ? max * 5 : max),
@@ -55,7 +61,12 @@ export async function throttle(
   )
     fail(429, "Muitas tentativas. Aguarde 15 minutos.");
 }
-async function reauthenticate(req: Request, env: Env, user: User, b: Row) {
+export async function reauthenticate(
+  req: Request,
+  env: Env,
+  user: User,
+  b: Row,
+) {
   admin(user);
   await throttle(req, env, "admin-confirm", user.id, 8);
   const row = await env.DB.prepare(
@@ -330,11 +341,15 @@ export async function professional(
   if (path === "/api/people" && method === "GET") {
     admin(user);
     const type = url.searchParams.get("type") || "";
-    if (type && !["EQUIPE_GEAR", "REVENDEDOR"].includes(type)) fail(400, "Tipo de usuário inválido.");
+    if (type && !["EQUIPE_GEAR", "REVENDEDOR"].includes(type))
+      fail(400, "Tipo de usuário inválido.");
     const q = (url.searchParams.get("q") || "").slice(0, 160),
       offset = Math.max(
         0,
-        Math.floor(Number(url.searchParams.get("offset")) || 0),
+        Math.min(
+          10000,
+          Math.floor(Number(url.searchParams.get("offset")) || 0),
+        ),
       );
     const rows = (
       await db

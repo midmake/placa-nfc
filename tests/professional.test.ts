@@ -14,6 +14,116 @@ const business = {
   phone: "51999991111",
   google_url: "https://www.google.com/maps?cid=123",
 };
+test("aceitação revendedor remoto: convite, login, 20→13, edição e recuperação sem suporte", async () => {
+  const f = await fixture();
+  const outgoing: any[] = [];
+  const original = globalThis.fetch;
+  f.env.RESEND_API_KEY = "fixture-only";
+  f.env.EMAIL_FROM = "Gear Go Digital <acesso@geargo.com.br>";
+  globalThis.fetch = (async (_url, init) => {
+    outgoing.push(JSON.parse(String(init?.body)));
+    return new Response('{"id":"mock"}', { status: 200 });
+  }) as typeof fetch;
+  try {
+    const invitation = await f.invite("REVENDEDOR", "remote@example.test");
+    assert.equal(invitation.b.delivery, "SENT");
+    const lot = await f.lot(20);
+    assert.equal((await f.allocate(lot.id, 20, invitation.b.id)).r.status, 201);
+    assert.equal((await f.accept(invitation.b.link)).r.status, 200);
+    let cookie = "";
+    const remote = async (path: string, method = "GET", data?: any) => {
+      const r = await worker.fetch(
+        new Request("https://app.geargo.com.br" + path, {
+          method,
+          headers: {
+            origin: "https://app.geargo.com.br",
+            "content-type": "application/json",
+            "cf-connecting-ip": "remote",
+            cookie,
+          },
+          body: data === undefined ? undefined : JSON.stringify(data),
+        }),
+        f.env,
+      );
+      const b = (await r.json()) as any;
+      return { r, b };
+    };
+    const login = await remote("/api/login", "POST", {
+      email: "remote@example.test",
+      password: PASSWORD,
+    });
+    assert.equal(login.r.status, 200);
+    cookie = login.r.headers.get("set-cookie")!.split(";")[0];
+    let eid = "";
+    for (let i = 0; i < 7; i++) {
+      const proof = await remote("/api/activation/verify", "POST", {
+        code: lot.plates[i].physical_code,
+      });
+      assert.equal(proof.r.status, 200);
+      const result = await remote("/api/activation/complete", "POST", {
+        ...business,
+        confirm_new: true,
+        grant: proof.b.grant,
+      });
+      assert.equal(result.r.status, 200);
+      eid = result.b.establishment_id;
+    }
+    const balance = (await remote("/api/allocations")).b[0];
+    assert.deepEqual(
+      [balance.quantity, balance.consumed, balance.available],
+      [20, 7, 13],
+    );
+    const e = (await remote("/api/establishments/" + eid)).b;
+    assert.equal(
+      (
+        await remote("/api/establishments/" + eid, "PATCH", {
+          ...e,
+          google_url: "https://google.com/maps?cid=456",
+        })
+      ).r.status,
+      200,
+    );
+    assert.equal(
+      (await f.call("/api/establishments/" + eid, "GET", undefined, "other")).r
+        .status,
+      404,
+    );
+    assert.equal(
+      (
+        await remote("/api/password/forgot", "POST", {
+          email: "remote@example.test",
+        })
+      ).r.status,
+      200,
+    );
+    const reset = outgoing
+      .at(-1)
+      .text.match(/https:\/\/[^\s]+\/redefinir\/[a-f0-9]{64}/)[0];
+    const nextPassword = PASSWORD + "-new";
+    assert.equal(
+      (
+        await remote("/api/access/accept", "POST", {
+          token: reset.split("/").at(-1),
+          password: nextPassword,
+          confirmation: nextPassword,
+        })
+      ).r.status,
+      200,
+    );
+    assert.equal((await remote("/api/me")).r.status, 401);
+    assert.equal(
+      (
+        await remote("/api/login", "POST", {
+          email: "remote@example.test",
+          password: nextPassword,
+        })
+      ).r.status,
+      200,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
 async function fixture() {
   const db = new TestDB(),
     hash = await hashPassword(PASSWORD, "test-pepper".repeat(4));

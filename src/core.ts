@@ -1,5 +1,6 @@
 import { digest, hashPassword, randomToken } from "./security";
 import { parseGoogleURL, validateGoogleDestination } from "./google-url";
+import { SEGMENTS } from "./segments";
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
@@ -54,8 +55,29 @@ export const text = (v: unknown, name: string, max = 160): string =>
 export async function body(req: Request): Promise<Row> {
   if (!req.headers.get("content-type")?.includes("application/json"))
     fail(415, "Envie JSON.");
-  const raw = await req.text();
-  if (raw.length > 16384) fail(413, "Formulário muito grande.");
+  if (Number(req.headers.get("content-length")) > 16384)
+    fail(413, "Formulário muito grande.");
+  const reader = req.body?.getReader();
+  const decoder = new TextDecoder();
+  let raw = "",
+    size = 0;
+  if (reader) {
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 16384) {
+          await reader.cancel();
+          fail(413, "Formulário muito grande.");
+        }
+        raw += decoder.decode(value, { stream: true });
+      }
+      raw += decoder.decode();
+    } finally {
+      reader.releaseLock();
+    }
+  }
   try {
     const v = JSON.parse(raw);
     if (v && typeof v === "object" && !Array.isArray(v)) return v;
@@ -152,6 +174,7 @@ export async function limitLogin(db: D1Database, email: string, ip: string) {
   const keys = [
     { key: await digest("email:" + email), max: 10 },
     { key: await digest("ip:" + ip), max: 40 },
+    { key: await digest("login-pair:" + email + ":" + ip), max: 10 },
   ];
   const rows = await db.batch(
     keys.map((k) =>
@@ -162,23 +185,31 @@ export async function limitLogin(db: D1Database, email: string, ip: string) {
         .bind(k.key, now + 900000, now, now, now + 900000),
     ),
   );
-  if (rows.some((r, i) => Number((r.results[0] as Row).attempts) > keys[i].max))
-    fail(429, "Muitas tentativas. Aguarde 15 minutos.");
   await db
-    .prepare("DELETE FROM login_limits WHERE reset_at<?")
+    .prepare(
+      "DELETE FROM login_limits WHERE key IN (SELECT key FROM login_limits WHERE reset_at<? LIMIT 100)",
+    )
     .bind(now - 900000)
     .run();
+  if (rows.some((r, i) => Number((r.results[0] as Row).attempts) > keys[i].max))
+    fail(429, "Muitas tentativas. Aguarde 15 minutos.");
 }
 export async function establishmentInput(b: Row, env: Env) {
   const name = text(b.name, "Nome"),
     city = text(b.city, "Cidade", 100),
-    segment = text(b.segment, "Segmento", 80),
+    segment = text(
+      b.segment === "__other__" ? b.segment_other : b.segment,
+      "Segmento",
+      80,
+    ),
     responsible = text(b.responsible, "Responsável"),
     phone = text(b.phone, "Telefone", 30);
   const normalized = normalizePhone(phone);
   if (!/^\d{10,15}$/.test(normalized))
     fail(400, "Telefone inválido. Informe DDD e número.");
   if (
+    b.segment !== "__other__" &&
+    !SEGMENTS.includes(segment) &&
     !(await env.DB.prepare("SELECT name FROM categories WHERE name=?")
       .bind(segment)
       .first())

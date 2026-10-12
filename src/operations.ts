@@ -24,7 +24,7 @@ import {
   validQrKey,
 } from "./physical-code";
 import { parseGoogleURL } from "./google-url";
-import { allocationFor } from "./professional";
+import { allocationFor, throttle } from "./professional";
 
 const ACTIVATION_ERROR =
   "Não foi possível validar esta placa. Confira o código ou fale com o administrador.";
@@ -148,6 +148,9 @@ async function finishActivation(req: Request, env: Env, user: User, b: Row) {
       );
     eid = crypto.randomUUID();
     stmts.push(
+      db
+        .prepare("INSERT OR IGNORE INTO categories(name) VALUES(?)")
+        .bind(input.segment),
       db
         .prepare(
           "INSERT INTO establishments(id,owner_id,name,city,segment,responsible,phone,phone_normalized,google_url,name_key,city_key,initial_snapshot,created_by,address,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -432,7 +435,10 @@ export async function operations(
     if (!p || (b.qr !== undefined && `${p.code}-${p.token}` !== b.qr))
       fail(404, ACTIVATION_ERROR);
     if (p.owner_id && p.owner_id !== user.id)
-      fail(409, "Esta placa foi designada pelo administrador a outro usuário. Peça ao administrador para revisar a atribuição antes de ativar.");
+      fail(
+        409,
+        "Esta placa foi designada pelo administrador a outro usuário. Peça ao administrador para revisar a atribuição antes de ativar.",
+      );
     const eligibility = await allocationFor(db, user, p);
     const grant = randomToken();
     await db.batch([
@@ -458,8 +464,10 @@ export async function operations(
       is_test: !!eligibility.batch.is_test,
     });
   }
-  if (path === "/api/activation/complete" && method === "POST")
+  if (path === "/api/activation/complete" && method === "POST") {
+    await throttle(req, env, "activation-complete", user.id, 30);
     return finishActivation(req, env, user, await body(req));
+  }
   // There is deliberately no old ID-only activation endpoint: it would bypass proof.
   if (
     /^\/api\/plates\/\d+\/activate$/.test(path) ||
@@ -651,6 +659,25 @@ export async function operations(
       !url.searchParams.get("owner_id")
     )
       clauses.push("p.owner_id IS NOT NULL");
+    const selected = url.searchParams.get("status") || "ALL";
+    const statusFilter: Record<string, string> = {
+      ALL: "1=1",
+      ACTIVE: "p.status='ACTIVE' AND p.blocked=0",
+      INACTIVE: "p.status<>'ACTIVE' AND p.blocked=0",
+      BLOCKED: "p.blocked=1",
+    };
+    if (!Object.hasOwn(statusFilter, selected))
+      fail(400, "Filtro de placas inválido.");
+    const counts =
+      user.role === "ADMIN" && url.searchParams.get("batch_id")
+        ? await db
+            .prepare(
+              "SELECT COUNT(*) AS total,COALESCE(SUM(status='ACTIVE' AND blocked=0),0) AS active,COALESCE(SUM(status<>'ACTIVE' AND blocked=0),0) AS inactive,COALESCE(SUM(blocked=1),0) AS blocked FROM plates WHERE batch_id=?",
+            )
+            .bind(url.searchParams.get("batch_id"))
+            .first()
+        : null;
+    clauses.push(statusFilter[selected]);
     const rows = (
       await db
         .prepare(
@@ -660,6 +687,7 @@ export async function operations(
         .all<Row>()
     ).results;
     return json({
+      counts,
       plates: rows.map((p) => ({ ...p, qr_url: qrURL(baseURL(req, env), p) })),
       next_after: rows.length === 100 ? rows.at(-1)!.id : null,
     });

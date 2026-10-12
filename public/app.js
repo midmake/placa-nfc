@@ -23,9 +23,12 @@ const pendingQR = () => GearGoFlow.pendingQR(location.href);
 const clearPending = () => history.replaceState(null, "", location.pathname);
 const plateLabel = (p) => p.physical_code || p.code;
 const plateStatus = (p) => (p.blocked ? "BLOQUEADA" : status[p.status]);
+let noticeTimer;
 function message(s, error = false) {
+  clearTimeout(noticeTimer);
   notice.textContent = s;
   notice.className = error ? "error" : "";
+  if (s) noticeTimer = setTimeout(() => message(""), 5000);
 }
 async function api(path, method = "GET", data) {
   let r;
@@ -72,7 +75,11 @@ function on(id, event, fn) {
     }
   });
 }
-const values = (e) => Object.fromEntries(new FormData(e.currentTarget));
+const values = (e) => {
+  const b = Object.fromEntries(new FormData(e.currentTarget));
+  if (b.segment === "Outros" && "segment_other" in b) b.segment = "__other__";
+  return b;
+};
 function menu() {
   if (!me || me.must_change_password) {
     nav.innerHTML = "";
@@ -80,10 +87,11 @@ function menu() {
   }
   const primary =
     me.role === "ADMIN"
-      ? ["dashboard", "batches", "establishments", "activate"]
+      ? ["dashboard", "batches", "establishments", "activate", "reviewLink"]
       : [
           "establishments",
           "activate",
+          "reviewLink",
           ...(me.commercial_type === "REVENDEDOR" ? ["balance"] : []),
         ];
   const secondary = [
@@ -97,6 +105,7 @@ function menu() {
     establishments: "Clientes",
     activate: "Ativar placa",
     balance: "Meu saldo",
+    reviewLink: "Gerar link de avaliação",
     plates: "Placas por vendedor",
     users: "Equipe GearGo",
     resellers: "Revendedores",
@@ -120,6 +129,7 @@ async function go(p) {
   message("");
   page = p;
   menu();
+  message("");
   app.innerHTML = "<p>Carregando…</p>";
   if (p === "logout") {
     await api("/logout", "POST", {});
@@ -133,7 +143,7 @@ async function go(p) {
     plates,
     establishments,
     batches,
-    userList,
+    reviewLink,
     users: () => people("", 0, "EQUIPE_GEAR"),
     resellers: () => people("", 0, "REVENDEDOR"),
     audit,
@@ -144,6 +154,7 @@ async function go(p) {
 function login() {
   document.body.classList.add("login-view");
   nav.innerHTML = "";
+  message("");
   app.innerHTML = `<div class="login-layout"><section class="login-intro"><img class="official-logo" src="/gear-go-oficial.png" width="1536" height="512" alt="Gear Go Digital"><p class="eyebrow">GEAR GO DIGITAL</p><h1>Conexões reais.<br>Gestão simples.</h1><p>Suas placas, seus clientes.<br>Tudo no mesmo lugar.</p><div class="signal-line" aria-hidden="true"></div><small>Acesso exclusivo da equipe</small></section><section class="panel login-panel"><h2>${pendingQR() ? "Entre para ativar sua placa" : "Bem-vindo de volta"}</h2><p class="muted">${pendingQR() ? "Depois do login, confirme o código impresso na placa." : "Acesse sua operação Gear Go Digital."}</p><form id="login"><label>E-mail<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Senha<input type="password" name="password" autocomplete="current-password" required maxlength="128"></label><button class="full">Entrar</button></form><button id="forgot-password" class="secondary full" type="button">Esqueci minha senha</button><p class="hint">Não há cadastro público. Solicite seu acesso ao administrador.</p></section></div>`;
   on("forgot-password", "click", () => forgotPassword());
   on("login", "submit", async (e) => {
@@ -156,6 +167,7 @@ function login() {
 function passwordForm() {
   document.body.classList.remove("login-view");
   menu();
+  message("");
   app.innerHTML = `<section class="panel narrow"><h1>${me.must_change_password ? "Defina sua senha" : "Alterar senha"}</h1><p>${me.must_change_password ? "Antes de continuar, substitua a senha temporária." : "Você entrará novamente após a alteração."}</p><form id="password"><label>Senha atual ou temporária<input name="current_password" type="password" autocomplete="current-password" required maxlength="128"></label><label>Nova senha (mínimo 12 caracteres)<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Repita a nova senha<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><button>Salvar nova senha</button></form></section>`;
   on("password", "submit", async (e) => {
     const b = values(e);
@@ -194,10 +206,11 @@ const userOptions = (selected) =>
 const segmentList = () =>
   `<datalist id="segments">${categories.map((c) => `<option value="${esc(c.name)}"></option>`).join("")}</datalist>`;
 function fields(e = {}) {
-  return `<div class="grid"><label>Nome do estabelecimento<input name="name" value="${esc(e.name)}" required maxlength="160" autocomplete="organization"></label><label>Cidade<input name="city" value="${esc(e.city)}" required maxlength="100" autocomplete="address-level2"></label><label>Segmento<input name="segment" list="segments" value="${esc(e.segment)}" required maxlength="80" placeholder="Digite para pesquisar">${segmentList()}</label><label>Nome do responsável<input name="responsible" value="${esc(e.responsible)}" required maxlength="160" autocomplete="name"></label><label>Telefone / WhatsApp comercial<input name="phone" type="tel" value="${esc(e.phone)}" required maxlength="30" autocomplete="tel" placeholder="(51) 99999-9999"></label><label>Link de avaliação Google<input name="google_url" type="url" value="${esc(e.google_url)}" required maxlength="2048" placeholder="https://…"></label></div><p class="hint">Informe dados comerciais que você esteja autorizado a fornecer. Usaremos esses dados para operar as placas e manter o histórico administrativo. <a href="/privacidade.html" target="_blank">Entenda o tratamento dos dados</a>.</p>`;
+  return `<div class="grid"><label>Nome do estabelecimento<input name="name" value="${esc(e.name)}" required maxlength="160" autocomplete="organization"></label><label>Cidade<input name="city" value="${esc(e.city)}" required maxlength="100" autocomplete="off" data-suggest="city"></label><label>Segmento<input name="segment" value="${esc(e.segment)}" required maxlength="80" autocomplete="off" data-suggest="segment" placeholder="Toque ou digite para pesquisar"></label><label data-other-segment hidden>Qual segmento?<input name="segment_other" maxlength="80" disabled placeholder="Informe o segmento do estabelecimento"></label><label>Nome do responsável<input name="responsible" value="${esc(e.responsible)}" required maxlength="160" autocomplete="name"></label><label>Telefone / WhatsApp comercial<input name="phone" type="tel" value="${esc(e.phone)}" required maxlength="30" autocomplete="tel" placeholder="(51) 99999-9999"></label><label>Link de avaliação Google<input name="google_url" type="url" value="${esc(e.google_url)}" required maxlength="2048" placeholder="https://…"><button type="button" class="secondary" data-copy-field="google_url">Copiar link de avaliação</button><button type="button" class="secondary" data-generate-review>Converter link compartilhado</button></label></div><p class="hint">Informe dados comerciais que você esteja autorizado a fornecer. Usaremos esses dados para operar as placas e manter o histórico administrativo. <a href="/privacidade.html" target="_blank">Entenda o tratamento dos dados</a>.</p>`;
 }
 async function userList() {
   users = await api("/users");
+  message("");
   app.innerHTML = `<h1>Usuários</h1><section class="panel"><h2>Criar usuário</h2><form id="create-user"><div class="grid"><label>Nome<input name="name" required maxlength="160"></label><label>E-mail<input name="email" type="email" required maxlength="254"></label><label>Senha temporária (opcional)<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="Em branco: gerar senha segura"></label></div><button>Criar usuário</button></form><div id="new-credentials"></div></section><div class="grid">${users.map((u) => `<article class="card"><h2>${esc(u.name)}</h2><p class="wrap">${esc(u.email)}</p><small>${u.role === "ADMIN" ? "Administrador" : "Usuário"}${u.must_change_password ? " · Troca de senha pendente" : ""}</small><div class="actions"><button class="secondary" data-reset="${esc(u.id)}">Resetar senha</button></div><div id="reset-${esc(u.id)}"></div></article>`).join("")}</div>`;
   const credentials = (p) =>
     `<p>Entregue esta senha temporária ao usuário por um canal privado. Ela é exibida somente agora:</p><p class="secret">${esc(p)}</p><p class="hint">A troca será obrigatória no primeiro acesso.</p>`;
@@ -213,14 +226,15 @@ async function userList() {
   });
   app.querySelectorAll("[data-reset]").forEach((btn) =>
     onMatch(btn, async () => {
-      if (
-        !confirm("Resetar a senha e encerrar todas as sessões deste usuário?")
-      )
-        return;
+      const confirmation = await confirmAdmin(
+        "Resetar senha e encerrar sessões",
+        "RESETAR",
+      );
+      if (!confirmation) return;
       const r = await api(
         `/users/${btn.dataset.reset}/reset-password`,
         "POST",
-        {},
+        confirmation,
       );
       document.getElementById("reset-" + btn.dataset.reset).innerHTML =
         credentials(r.temporary_password);
@@ -279,6 +293,7 @@ async function audit(type = "", id = "", before = "", category = "all") {
     changes: "Alterações de dados / Link",
     blocks: "Bloqueios",
   };
+  message("");
   app.innerHTML = `<h1>Histórico administrativo</h1><label>Natureza da alteração<select id="audit-category">${Object.entries(
     categories,
   )
