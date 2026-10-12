@@ -235,7 +235,7 @@ test("colisão de código no banco regenera automaticamente sem duplicar lote", 
   const original = f.db.batch.bind(f.db);
   let tries = 0;
   f.db.batch = async (stmts) => {
-    if (tries++ === 0)
+    if (stmts.some(s => s._query.includes("INSERT INTO plates")) && tries++ === 0)
       throw new Error("UNIQUE constraint failed: plates.physical_code");
     return original(stmts);
   };

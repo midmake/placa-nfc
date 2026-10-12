@@ -5,9 +5,172 @@ import { JSDOM } from "jsdom";
 const source = (p: string) =>
   readFileSync(new URL("../public/" + p, import.meta.url), "utf8");
 const qr = "A00001-" + "a".repeat(48);
+test("notice tem contraste no login, substitui mensagem e expira em cinco segundos", async () => {
+  const { w, dom } = await ui();
+  const timers = new Map<number, () => void>();
+  let id = 0;
+  w.setTimeout = (fn: () => void, ms: number) => {
+    assert.equal(ms, 5000);
+    timers.set(++id, fn);
+    return id;
+  };
+  w.clearTimeout = (key: number) => timers.delete(key);
+  w.eval('message("Erro",true);message("Sucesso")');
+  assert.equal(timers.size, 1);
+  const notice = w.document.querySelector("#notice");
+  assert.equal(notice.textContent, "Sucesso");
+  assert.equal(notice.className, "");
+  assert.match(source("style.css"), /#notice\s*\{\s*color: #182d49/);
+  [...timers.values()][0]();
+  assert.equal(notice.textContent, "");
+  w.eval('message("Anterior",true);forgotPassword()');
+  assert.equal(notice.textContent, "");
+  dom.window.close();
+});
+test("cidade e segmento sugerem antes de submit, Outros exige descrição e endereço não é solicitado", async () => {
+  const { w, dom, submit, requests } = await ui({ logged: true });
+  submit("#verify-code", { code: "A3009K7Q2" });
+  await settle();
+  const form = w.document.querySelector("#activate-form");
+  assert.ok(!form.querySelector('[name="address"]'));
+  const city = form.elements.city;
+  city.focus();
+  city.value = "porto";
+  city.dispatchEvent(new w.Event("input", { bubbles: true }));
+  await settle();
+  const list = w.document.getElementById(city.getAttribute("aria-controls"));
+  assert.equal(list.hidden, false);
+  assert.match(list.textContent, /Porto Alegre/);
+  list.children[0].click();
+  assert.equal(city.value, "Porto Alegre");
+  const segment = form.elements.segment;
+  segment.focus();
+  await settle();
+  const options = w.document.getElementById(
+    segment.getAttribute("aria-controls"),
+  );
+  assert.equal(options.hidden, false);
+  options.lastChild.click();
+  assert.equal(form.elements.segment_other.required, true);
+  assert.equal(form.elements.segment_other.disabled, false);
+  form.elements.segment_other.value = "Personalizado";
+  form.dispatchEvent(
+    new w.Event("submit", { bubbles: true, cancelable: true }),
+  );
+  await settle();
+  assert.equal(
+    requests.find((r: any) => r.path === "/api/activation/complete").b.segment,
+    "__other__",
+  );
+  dom.window.close();
+});
+test("gerador no menu apresenta copiar/testar e conversão do formulário", async () => {
+  const { w, dom, submit } = await ui({ logged: true });
+  await w.eval('go("reviewLink")');
+  submit("#review-link-form", {
+    url: "https://google.com/maps?query_place_id=ChIJ3S-JXmauEmsRUcIaWtf4MzE",
+  });
+  await settle();
+  assert.ok(w.document.querySelector("#review-result [data-copy]"));
+  assert.equal(w.document.querySelector("#review-result a").target, "_blank");
+  await w.eval('go("activate")');
+  submit("#verify-code", { code: "A3009K7Q2" });
+  await settle();
+  const field = w.document.querySelector('[name="google_url"]');
+  field.value = "https://maps.app.goo.gl/Test";
+  w.document.querySelector("[data-generate-review]").click();
+  await settle();
+  assert.match(field.value, /local\/writereview/);
+  dom.window.close();
+});
 async function settle() {
   for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
 }
+for (const profile of [
+  { role: "ADMIN", commercial_type: "EQUIPE_GEAR" },
+  { role: "USER", commercial_type: "EQUIPE_GEAR" },
+  { role: "USER", commercial_type: "REVENDEDOR" },
+])
+  test(
+    "gerador compacto na home: " + profile.role + "/" + profile.commercial_type,
+    async () => {
+      const { w, dom, submit } = await ui({
+        logged: true,
+        url: "https://test.invalid/",
+        ...profile,
+      });
+      const app = w.document.querySelector("#app");
+      assert.ok(app.firstElementChild.matches(".review-quick"));
+      assert.equal(w.document.querySelectorAll("#review-link-form").length, 1);
+      assert.match(
+        app.firstElementChild.textContent,
+        /GERAR LINK DE AVALIAÇÃO DO ESTABELECIMENTO/,
+      );
+      submit("#review-link-form", {
+        url: "https://share.google/2iEk4mF5TiTm2VuHn",
+      });
+      await settle();
+      const link = w.document.querySelector("#review-result a");
+      assert.equal(link.target, "_blank");
+      assert.match(link.rel, /noopener/);
+      assert.match(link.href, /search.google.com\/local\/writereview/);
+      let copied = "";
+      Object.defineProperty(w.navigator, "clipboard", {
+        value: {
+          writeText: async (s: string) => {
+            copied = s;
+          },
+        },
+        configurable: true,
+      });
+      w.document.querySelector("#review-result [data-copy]").click();
+      await settle();
+      assert.equal(copied, link.href);
+      const input = w.document.querySelector('#review-link-form [name="url"]');
+      input.value = "https://share.google/Other";
+      input.dispatchEvent(new w.Event("input", { bubbles: true }));
+      assert.equal(
+        w.document.querySelector("#review-result").children.length,
+        0,
+      );
+      dom.window.close();
+    },
+  );
+test("conversão recusada preserva valor exato e formulário manual continua habilitado", async () => {
+  const { w, dom, submit } = await ui({ logged: true });
+  submit("#verify-code", { code: "A3009K7Q2" });
+  await settle();
+  const field = w.document.querySelector('[name="google_url"]');
+  const original = "https://share.google/2iEk4mF5TiTm2VuHn";
+  field.value = original;
+  const previous = w.fetch;
+  w.fetch = async (path: string, opts: any) =>
+    path === "/api/google-review-link"
+      ? {
+          ok: false,
+          status: 400,
+          json: async () => ({
+            error: "Conversão indisponível; use o link manual.",
+          }),
+        }
+      : previous(path, opts);
+  const button = w.document.querySelector("[data-generate-review]");
+  button.click();
+  await settle();
+  assert.equal(field.value, original);
+  assert.equal(field.disabled, false);
+  assert.equal(button.disabled, false);
+  assert.match(
+    w.document.querySelector("#notice").textContent,
+    /Conversão indisponível/,
+  );
+  assert.equal(
+    w.document.querySelector("#activate-form button[type=submit]")?.disabled ||
+      false,
+    false,
+  );
+  dom.window.close();
+});
 async function ui({
   logged = false,
   temporary = false,
@@ -113,12 +276,25 @@ async function ui({
         { batch_name: "Lote", quantity: 20, consumed: 7, available: 13 },
       ];
     if (path.startsWith("/api/establishments")) response = [];
+    if (path === "/api/cities")
+      response = ["Porto Alegre", "Porto Belo", "São Paulo"];
+    if (path === "/api/google-review-link")
+      response = {
+        url: "https://search.google.com/local/writereview?placeid=ChIJ3S-JXmauEmsRUcIaWtf4MzE",
+      };
     if (path === "/api/activation/verify")
       response = { grant: "b".repeat(64), code: "A3009-K7Q2" };
     return { ok: status < 400, status, json: async () => response };
   };
   w.eval(
-    ["flow.js", "operations-ui.js", "professional-ui.js", "app.js", "ux.js"]
+    [
+      "flow.js",
+      "operations-ui.js",
+      "professional-ui.js",
+      "app.js",
+      "review-link.js",
+      "ux.js",
+    ]
       .map(source)
       .join("\n"),
   );
@@ -147,25 +323,50 @@ test("ativação aceita digitação sem hífen e limpa erro anterior ao editar",
 
 test("origem confirmada distingue download dos mesmos QRs sem armazenar PDFs", async () => {
   const { w, dom } = await ui({ logged: true, role: "ADMIN" });
-  await w.eval('printScreen({id:"lot",name:"A001",quantity:5,physical_prefix:"A3009",is_test:0,production_origin:"https://test.invalid"})');
-  assert.match(w.document.querySelector('button[value="production"]').textContent, /mesmos QRs/);
-  assert.match(w.document.body.textContent, /Não cria novas placas nem altera os QRs/);
-  assert.match(w.document.body.textContent, /não ficam armazenados na plataforma/);
+  await w.eval(
+    'printScreen({id:"lot",name:"A001",quantity:5,physical_prefix:"A3009",is_test:0,production_origin:"https://test.invalid"})',
+  );
+  assert.match(
+    w.document.querySelector('button[value="production"]').textContent,
+    /mesmos QRs/,
+  );
+  assert.match(
+    w.document.body.textContent,
+    /Não cria novas placas nem altera os QRs/,
+  );
+  assert.match(
+    w.document.body.textContent,
+    /não ficam armazenados na plataforma/,
+  );
   dom.window.close();
 });
 
 test("Equipe GearGo e Revendedores têm entradas, listas e convites separados", async () => {
-  const { w, dom, requests } = await ui({ logged: true, role: "ADMIN", url: "https://test.invalid/" });
-  w.document.querySelector('#quick-people').click();
+  const { w, dom, requests } = await ui({
+    logged: true,
+    role: "ADMIN",
+    url: "https://test.invalid/",
+  });
+  w.document.querySelector("#quick-people").click();
   await settle();
-  assert.equal(w.document.querySelector('h1').textContent, "Equipe GearGo");
-  assert.deepEqual(Array.from(w.document.querySelectorAll('[name="commercial_type"] option')).map((o: any) => o.value), ["EQUIPE_GEAR"]);
+  assert.equal(w.document.querySelector("h1").textContent, "Equipe GearGo");
+  assert.deepEqual(
+    Array.from(
+      w.document.querySelectorAll('[name="commercial_type"] option'),
+    ).map((o: any) => o.value),
+    ["EQUIPE_GEAR"],
+  );
   w.document.querySelector('[data-page="resellers"]').click();
   await settle();
-  assert.equal(w.document.querySelector('h1').textContent, "Revendedores");
-  assert.deepEqual(Array.from(w.document.querySelectorAll('[name="commercial_type"] option')).map((o: any) => o.value), ["REVENDEDOR"]);
-  assert.ok(requests.some(r => r.path.includes('type=EQUIPE_GEAR')));
-  assert.ok(requests.some(r => r.path.includes('type=REVENDEDOR')));
+  assert.equal(w.document.querySelector("h1").textContent, "Revendedores");
+  assert.deepEqual(
+    Array.from(
+      w.document.querySelectorAll('[name="commercial_type"] option'),
+    ).map((o: any) => o.value),
+    ["REVENDEDOR"],
+  );
+  assert.ok(requests.some((r) => r.path.includes("type=EQUIPE_GEAR")));
+  assert.ok(requests.some((r) => r.path.includes("type=REVENDEDOR")));
   dom.window.close();
 });
 

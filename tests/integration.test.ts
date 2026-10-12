@@ -289,7 +289,7 @@ test("MVP completo: autenticação, autorização, lote, cadastro, múltiplas pl
       .r.status,
     409,
   );
-  const reset = await call(`/api/users/${u.id}/reset-password`, "POST", {});
+  const reset = await call(`/api/users/${u.id}/reset-password`, "POST", {current_password: "Permanent-Admin-123"});
   assert.ok(reset.b.temporary_password);
   assert.equal(
     (await call("/api/me", "GET", undefined, userCookie)).r.status,

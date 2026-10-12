@@ -68,6 +68,7 @@ export async function validateGoogleDestination(
   fetcher: typeof fetch = fetch,
 ): Promise<string> {
   let u = parseGoogleURL(input);
+  const signal = AbortSignal.timeout(6000);
   // Resolve short links at registration and store the canonical Google URL.
   // No network request is ever sent to an unvalidated host/path.
   for (let i = 0; shortcuts.has(u.hostname); i++) {
@@ -77,7 +78,7 @@ export async function validateGoogleDestination(
     try {
       res = await fetcher(u.toString(), {
         redirect: "manual",
-        signal: AbortSignal.timeout(6000),
+        signal,
         headers: { "User-Agent": "GearGo-LinkValidation/1.0" },
       });
     } catch {

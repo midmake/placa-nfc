@@ -897,3 +897,67 @@ nav {
     display: none;
   }
 }
+#notice {
+  color: #182d49;
+}
+.suggestions {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #c5d2e7;
+  border-radius: 10px;
+  background: #fff;
+  color: #182d49;
+  font-weight: 400;
+}
+.suggestions [role="option"] {
+  padding: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.suggestions [role="option"]:hover,
+.suggestions [aria-selected="true"] {
+  background: #e8efff;
+  color: #154cac;
+}
+.lot-counts button {
+  display: block;
+  background: transparent;
+  color: #182d49;
+  padding: 8px 4px;
+  min-width: 0;
+  border-radius: 0;
+}
+.lot-counts button[aria-pressed="true"] {
+  background: #e8efff;
+  box-shadow: inset 0 -2px #175cd3;
+}
+.nav-primary {
+  flex-wrap: wrap;
+}
+.grid > *,
+.panel,
+.card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.review-quick h2 {
+  font-size: 1rem;
+  margin-top: 0;
+}
+.review-link-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: end;
+}
+.review-link-form label {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+.review-link-form button {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+.review-quick .hint {
+  margin-bottom: 0;
+}
