@@ -940,24 +940,3 @@ nav {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.review-quick h2 {
-  font-size: 1rem;
-  margin-top: 0;
-}
-.review-link-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  align-items: end;
-}
-.review-link-form label {
-  flex: 1 1 16rem;
-  min-width: 0;
-}
-.review-link-form button {
-  flex: 0 1 auto;
-  max-width: 100%;
-}
-.review-quick .hint {
-  margin-bottom: 0;
-}

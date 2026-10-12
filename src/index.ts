@@ -14,7 +14,6 @@ import {
   throttle,
   reauthenticate,
 } from "./professional";
-import { generateReviewLink } from "./google-review-link";
 import {
   type Env,
   type User,
@@ -182,20 +181,6 @@ async function route(
   }
   if (user.must_change_password)
     fail(403, "Troque sua senha temporária antes de continuar.");
-  if (path === "/api/google-review-link" && method === "POST") {
-    await throttle(req, env, "google-review-link", user.id, 20);
-    const b = await body(req);
-    try {
-      return json(await generateReviewLink(b.url));
-    } catch (e) {
-      return fail(
-        400,
-        e instanceof Error && e.name !== "TimeoutError"
-          ? e.message
-          : "Tempo esgotado. Cole o link completo do Google.",
-      );
-    }
-  }
   if (path === "/api/cities" && method === "GET") {
     const rows = (
       await db

@@ -1,160 +1,39 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { generateReviewLink, UNRESOLVED } from "../src/google-review-link";
 import { fixture } from "./operations.test";
 import { body } from "../src/core";
 import { hashPassword } from "../src/security";
+// Valid manual destination used by the existing edit/redirect regression.
+const review =
+  "https://search.google.com/local/writereview?placeid=ChIJ3S-JXmauEmsRUcIaWtf4MzE";
 
-// Public Google Maps URL documentation: Sydney Opera House (actual published Place ID).
-const place = "ChIJ3S-JXmauEmsRUcIaWtf4MzE";
-const review = "https://search.google.com/local/writereview?placeid=" + place;
-for (const url of [
-  review,
-  "https://www.google.com/maps/search/?api=1&query=Sydney+Opera+House&query_place_id=" +
-    place,
-  "https://google.com/maps?q=place_id:" + place + "&utm_source=test",
-  "https://www.google.com/maps/place/Sydney/data=!4m2!3m1!1s" + place,
-  "https://g.page/r/CbEGsFfmQ6MIEBM/review",
-])
-  test("review converter: " + new URL(url).pathname, async () => {
-    const r = await generateReviewLink(url, (async () => {
-      throw Error("No fetch needed");
-    }) as typeof fetch);
-    assert.equal(r.url, url.includes("g.page") ? url : review);
-  });
-test("short link uses manual redirects, one timeout, cancels body", async () => {
-  let calls = 0,
-    signal: AbortSignal | null | undefined;
-  const f = (async (_url, init) => {
-    assert.equal(init?.redirect, "manual");
-    if (signal) assert.equal(signal, init?.signal);
-    signal = init?.signal;
-    calls++;
-    return new Response(null, {
-      status: 302,
-      headers: { location: calls === 1 ? "https://goo.gl/maps/Test" : review },
-    });
-  }) as typeof fetch;
-  assert.equal(
-    (await generateReviewLink("https://maps.app.goo.gl/Test", f)).url,
-    review,
-  );
-  assert.equal(calls, 2);
-});
-for (const url of [
-  "javascript:alert(1)",
-  "data:text/html,test",
-  "http://google.com/maps",
-  "https://google.com.evil.test/maps",
-  "https://127.0.0.1/maps",
-  "https://10.0.0.1/maps",
-  "https://169.254.169.254/latest/meta-data",
-  "https://localhost/maps",
-  "https://[::1]/maps",
-  "https://google.com@evil.test/maps",
-  "https://google.com/url?q=https://evil.test",
-  "https://google.com/maps?redirect=https://evil.test",
-  "https://google.com:444/maps",
-])
-  test("review SSRF refuses before fetch: " + url, async () => {
-    let calls = 0;
-    await assert.rejects(() =>
-      generateReviewLink(url, (async () => {
-        calls++;
-        return new Response();
-      }) as typeof fetch),
-    );
-    assert.equal(calls, 0);
-  });
-test("review rejects external redirect, oversized location, redirect loop and unsupported CID", async () => {
-  for (const destination of [
-    "https://evil.test",
-    "https://127.0.0.1",
-    "https://google.com/maps?" + "x".repeat(2100),
-  ]) {
-    let calls = 0;
-    await assert.rejects(() =>
-      generateReviewLink("https://maps.app.goo.gl/Test", (async () => {
-        calls++;
-        return new Response(null, {
-          status: 302,
-          headers: { location: destination },
-        });
-      }) as typeof fetch),
-    );
-    assert.equal(calls, 1);
-  }
-  let calls = 0;
-  await assert.rejects(() =>
-    generateReviewLink("https://maps.app.goo.gl/Test", (async () => {
-      calls++;
-      return new Response(null, {
-        status: 302,
-        headers: { location: "https://maps.app.goo.gl/Test" },
-      });
-    }) as typeof fetch),
-  );
-  assert.equal(calls, 5);
-  await assert.rejects(
-    () => generateReviewLink("https://google.com/maps?cid=123"),
-    { message: UNRESOLVED },
-  );
-  await assert.rejects(() =>
-    generateReviewLink(
-      "https://google.com/maps?placeid=" +
-        place +
-        "&query_place_id=DifferentPlace123",
-    ),
-  );
-});
-test("review generator requires auth and rate limits users", async () => {
+test("endpoint do gerador removido retorna 404 sem requests externos", async () => {
   const f = await fixture();
-  assert.equal(
-    (
-      await f.call(
-        "/api/google-review-link",
-        "POST",
-        { url: review },
-        "anonymous",
-      )
-    ).r.status,
-    401,
-  );
-  for (let i = 0; i < 20; i++)
-    assert.equal(
-      (
-        await f.call(
-          "/api/google-review-link",
-          "POST",
-          { url: review },
-          "seller-a",
-        )
-      ).r.status,
-      200,
-    );
-  assert.equal(
-    (
-      await f.call(
-        "/api/google-review-link",
-        "POST",
-        { url: review },
-        "seller-a",
-      )
-    ).r.status,
-    429,
-  );
-  assert.equal(
-    (
-      await f.call(
-        "/api/google-review-link",
-        "POST",
-        { url: review },
-        "seller-b",
-      )
-    ).r.status,
-    200,
-  );
+  const original = globalThis.fetch;
+  let external = 0;
+  globalThis.fetch = (async () => {
+    external++;
+    throw new Error("Unexpected network");
+  }) as typeof fetch;
+  try {
+    for (const who of ["admin", "seller-a", "seller-b"])
+      assert.equal(
+        (
+          await f.call(
+            "/api/google-review-link",
+            "POST",
+            { url: "https://share.google/Example" },
+            who,
+          )
+        ).r.status,
+        404,
+      );
+    assert.equal(external, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
 });
+
 test("all-lot filters paginate, refresh counters and preserve URLs", async () => {
   const f = await fixture(),
     lot = await f.lot(251);
