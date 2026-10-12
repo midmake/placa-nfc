@@ -150,6 +150,8 @@ async function go(p) {
     activate: activationCode,
     password: passwordForm,
   }[p]();
+  if (p === "dashboard" || (p === "establishments" && me.role !== "ADMIN"))
+    mountReviewQuick();
 }
 function login() {
   document.body.classList.add("login-view");

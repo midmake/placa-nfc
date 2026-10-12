@@ -1,19 +1,46 @@
 async function reviewLink() {
   message("");
-  app.innerHTML =
-    '<section class="panel narrow"><h1>Gerar link de avaliação</h1><p>Cole aqui o link compartilhado do estabelecimento no Google.</p><form id="review-link-form"><label>Link do estabelecimento<input name="url" type="url" required maxlength="2048" placeholder="https://maps.app.goo.gl/…"></label><button class="full">Gerar link de avaliação</button></form><div id="review-result"></div><p class="hint">Sem API paga. Alguns formatos não permitem conversão automática. Teste o resultado e confira o estabelecimento antes de usar.</p></section>';
+  app.innerHTML = reviewLinkPanel(false);
+  bindReviewLink();
+}
+function reviewLinkPanel(compact) {
+  const heading = compact ? "h2" : "h1";
+  return `<section class="panel review-quick${compact ? "" : " narrow"}"><${heading}>GERAR LINK DE AVALIAÇÃO DO ESTABELECIMENTO</${heading}><p>Cole o link compartilhado do perfil no Google.</p><form id="review-link-form" class="review-link-form"><label>Link do estabelecimento<input name="url" type="text" inputmode="url" autocapitalize="none" spellcheck="false" required maxlength="2048" placeholder="https://share.google/…"></label><button>GERAR LINK DE AVALIAÇÃO</button></form><div id="review-result" aria-live="polite"></div><p class="hint">Confira o estabelecimento em TESTAR antes de usar. Se o Google não permitir a conversão, informe o link de avaliação manualmente.</p></section>`;
+}
+function mountReviewQuick() {
+  app.insertAdjacentHTML("afterbegin", reviewLinkPanel(true));
+  bindReviewLink();
+}
+function bindReviewLink() {
   on("review-link-form", "submit", async (e) => {
-    document.querySelector("#review-result").replaceChildren();
-    const r = await api("/google-review-link", "POST", values(e));
-    document.querySelector("#review-result").innerHTML =
-      '<h2>Identificador encontrado ✓</h2><p>Confira se o link abre o estabelecimento correto.</p><label>Link de avaliação<input readonly value="' +
-      esc(r.url) +
-      '"></label><div class="actions"><button type="button" data-copy="' +
-      esc(r.url) +
-      '">Copiar link</button><a class="button secondary" href="' +
-      esc(r.url) +
-      '" target="_blank" rel="noopener noreferrer">Testar link</a></div>';
+    const form = e.currentTarget;
+    const output = form.parentElement.querySelector("#review-result");
+    const button = form.querySelector("button");
+    const data = values(e);
+    output.replaceChildren();
+    button.disabled = true;
+    try {
+      const r = await api("/google-review-link", "POST", data);
+      if (!form.isConnected || form.elements.url.value !== data.url) return;
+      output.innerHTML =
+        "<p><strong>Link de avaliação gerado ✓</strong></p>" +
+        (r.name ? "<p>" + esc(r.name) + "</p>" : "") +
+        '<label>Link de avaliação<input readonly value="' +
+        esc(r.url) +
+        '"></label><div class="actions"><button type="button" data-copy="' +
+        esc(r.url) +
+        '">COPIAR</button><a class="button secondary" href="' +
+        esc(r.url) +
+        '" target="_blank" rel="noopener noreferrer">TESTAR</a></div>';
+    } finally {
+      button.disabled = false;
+    }
   });
+  document
+    .querySelector("#review-link-form")
+    .elements.url.addEventListener("input", () => {
+      document.querySelector("#review-result")?.replaceChildren();
+    });
 }
 // Optional conversion: existing valid destinations remain compatible.
 // A failed attempt never replaces or saves the field.

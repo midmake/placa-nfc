@@ -86,6 +86,91 @@ test("gerador no menu apresenta copiar/testar e conversão do formulário", asyn
 async function settle() {
   for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
 }
+for (const profile of [
+  { role: "ADMIN", commercial_type: "EQUIPE_GEAR" },
+  { role: "USER", commercial_type: "EQUIPE_GEAR" },
+  { role: "USER", commercial_type: "REVENDEDOR" },
+])
+  test(
+    "gerador compacto na home: " + profile.role + "/" + profile.commercial_type,
+    async () => {
+      const { w, dom, submit } = await ui({
+        logged: true,
+        url: "https://test.invalid/",
+        ...profile,
+      });
+      const app = w.document.querySelector("#app");
+      assert.ok(app.firstElementChild.matches(".review-quick"));
+      assert.equal(w.document.querySelectorAll("#review-link-form").length, 1);
+      assert.match(
+        app.firstElementChild.textContent,
+        /GERAR LINK DE AVALIAÇÃO DO ESTABELECIMENTO/,
+      );
+      submit("#review-link-form", {
+        url: "https://share.google/2iEk4mF5TiTm2VuHn",
+      });
+      await settle();
+      const link = w.document.querySelector("#review-result a");
+      assert.equal(link.target, "_blank");
+      assert.match(link.rel, /noopener/);
+      assert.match(link.href, /search.google.com\/local\/writereview/);
+      let copied = "";
+      Object.defineProperty(w.navigator, "clipboard", {
+        value: {
+          writeText: async (s: string) => {
+            copied = s;
+          },
+        },
+        configurable: true,
+      });
+      w.document.querySelector("#review-result [data-copy]").click();
+      await settle();
+      assert.equal(copied, link.href);
+      const input = w.document.querySelector('#review-link-form [name="url"]');
+      input.value = "https://share.google/Other";
+      input.dispatchEvent(new w.Event("input", { bubbles: true }));
+      assert.equal(
+        w.document.querySelector("#review-result").children.length,
+        0,
+      );
+      dom.window.close();
+    },
+  );
+test("conversão recusada preserva valor exato e formulário manual continua habilitado", async () => {
+  const { w, dom, submit } = await ui({ logged: true });
+  submit("#verify-code", { code: "A3009K7Q2" });
+  await settle();
+  const field = w.document.querySelector('[name="google_url"]');
+  const original = "https://share.google/2iEk4mF5TiTm2VuHn";
+  field.value = original;
+  const previous = w.fetch;
+  w.fetch = async (path: string, opts: any) =>
+    path === "/api/google-review-link"
+      ? {
+          ok: false,
+          status: 400,
+          json: async () => ({
+            error: "Conversão indisponível; use o link manual.",
+          }),
+        }
+      : previous(path, opts);
+  const button = w.document.querySelector("[data-generate-review]");
+  button.click();
+  await settle();
+  assert.equal(field.value, original);
+  assert.equal(field.disabled, false);
+  assert.equal(button.disabled, false);
+  assert.match(
+    w.document.querySelector("#notice").textContent,
+    /Conversão indisponível/,
+  );
+  assert.equal(
+    w.document.querySelector("#activate-form button[type=submit]")?.disabled ||
+      false,
+    false,
+  );
+  dom.window.close();
+});
 async function ui({
   logged = false,
   temporary = false,
