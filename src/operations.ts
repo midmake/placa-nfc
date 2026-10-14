@@ -12,6 +12,7 @@ import {
   getEst,
   guard,
   json,
+  key,
   mutate,
   text,
 } from "./core";
@@ -125,7 +126,7 @@ async function finishActivation(req: Request, env: Env, user: User, b: Row) {
     const matches = (
       await db
         .prepare(
-          "SELECT id,name,city,phone FROM establishments WHERE owner_id=? AND archived_at IS NULL AND is_test=? AND (phone_normalized=? OR google_url=? OR (name_key=? AND city_key=?)) LIMIT 20",
+          "SELECT id,name,city,phone FROM establishments WHERE owner_id=? AND archived_at IS NULL AND is_test=? AND (phone_normalized=? OR google_url=? OR (name_key=? AND city_key IN (?,?))) LIMIT 20",
         )
         .bind(
           user.id,
@@ -134,6 +135,7 @@ async function finishActivation(req: Request, env: Env, user: User, b: Row) {
           input.google_url,
           input.name_key,
           input.city_key,
+          key(input.city.split(" / ")[0]),
         )
         .all()
     ).results;

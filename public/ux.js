@@ -1,6 +1,15 @@
 // Progressive, accessible controls. No form contents are persisted to storage.
 let citySuggestions;
 let suggestionId = 0;
+function loadCities() {
+  citySuggestions ||= api("/cities").then((r) =>
+    r.map((name) => ({ value: name, label: name })),
+  ).catch((error) => {
+    citySuggestions = null;
+    throw error;
+  });
+  return citySuggestions;
+}
 const suggestionKey = (value) =>
   String(value)
     .normalize("NFD")
@@ -31,6 +40,30 @@ function enhanceSuggestions() {
       let items = [],
         selected = -1,
         generation = 0;
+      const isCity = input.dataset.suggest === "city";
+      let citySource = [];
+      const validateCity = () => {
+        if (isCity) input.setCustomValidity(
+          citySource.some((c) => c.value === input.value)
+            ? "" : "Selecione uma cidade cadastrada na lista, com sua UF.",
+        );
+      };
+      if (isCity) {
+        input.placeholder = "Digite e selecione a cidade / UF";
+        validateCity();
+        const initial = input.value;
+        loadCities().then((source) => {
+          citySource = source;
+          // Recognize existing official names without rewriting any stored data.
+          if (initial && input.value === initial) {
+            const matches = source.filter((c) =>
+              suggestionKey(c.value) === suggestionKey(initial) ||
+              c.value.split(" / ")[0].toLowerCase() === initial.trim().toLowerCase());
+            if (matches.length === 1) input.value = matches[0].value;
+          }
+          validateCity();
+        }).catch(() => validateCity());
+      }
       const close = () => {
         generation++;
         list.hidden = true;
@@ -53,15 +86,15 @@ function enhanceSuggestions() {
       };
       const render = async () => {
         other();
+        validateCity();
         const request = ++generation;
         const q = suggestionKey(input.value);
         let source;
         if (input.dataset.suggest === "city") {
-          citySuggestions ||= api("/cities").then((r) =>
-            r.map((name) => ({ value: name, label: name })),
-          );
           try {
-            source = await citySuggestions;
+            source = await loadCities();
+            citySource = source;
+            validateCity();
           } catch {
             citySuggestions = null;
             source = [];
@@ -108,7 +141,9 @@ function enhanceSuggestions() {
           const hint = document.createElement("p");
           hint.className = "hint";
           hint.textContent =
-            "Sem sugestões. Você pode informar a cidade manualmente.";
+            citySource.length
+              ? "Cidade não encontrada. Digite o nome oficial e selecione uma opção com UF."
+              : "Não foi possível carregar as cidades. Toque no campo para tentar novamente.";
           list.append(hint);
         }
         list.hidden = false;

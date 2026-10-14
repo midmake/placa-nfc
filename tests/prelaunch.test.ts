@@ -7,6 +7,32 @@ import { hashPassword } from "../src/security";
 const review =
   "https://search.google.com/local/writereview?placeid=ChIJ3S-JXmauEmsRUcIaWtf4MzE";
 
+test("activation and editing reject free-text cities; legacy data remains until explicitly saved", async () => {
+  const f = await fixture();
+  const { plates } = await f.lot(2);
+  const grant = (await f.verify(plates[0])).b.grant;
+  for (const city of ["Poa", "Cidade inventada", "Bom Jesus", "Porto Alegre / SC"]) {
+    const r = await f.call("/api/activation/complete", "POST", { ...f.data, city, grant }, "seller-a");
+    assert.equal(r.r.status, 400);
+    assert.match(r.b.error, /cidade cadastrada/);
+  }
+  assert.equal(f.db.sql.prepare("SELECT COUNT(*) n FROM establishments").get()!.n, 0);
+  const activated = await f.call("/api/activation/complete", "POST", { ...f.data, city: "Porto Alegre / RS", grant }, "seller-a");
+  assert.equal(activated.r.status, 200);
+  const path = "/api/establishments/" + activated.b.establishment_id;
+  const e = (await f.call(path)).b;
+  assert.equal(e.city, "Porto Alegre / RS");
+  const badEdit = await f.call(path, "PATCH", { ...e, city: "Poa" });
+  assert.equal(badEdit.r.status, 400);
+  assert.equal((await f.call(path)).b.city, "Porto Alegre / RS");
+  // Simulate a pre-existing record without UF. No migration or bulk rewrite.
+  f.db.sql.prepare("UPDATE establishments SET city='Porto Alegre',city_key='porto alegre' WHERE id=?").run(e.id);
+  assert.equal((await f.call(path)).b.city, "Porto Alegre");
+  const duplicate = await f.activate(plates[1], "seller-a", { phone: "51988882222", google_url: review });
+  assert.equal(duplicate.r.status, 409);
+  assert.equal(duplicate.b.matches[0].id, e.id);
+});
+
 test("endpoint do gerador removido retorna 404 sem requests externos", async () => {
   const f = await fixture();
   const original = globalThis.fetch;
@@ -95,7 +121,7 @@ test("edit preserves hidden address; owner and ADMIN edit, another seller cannot
     review,
   );
 });
-test("custom segments are validated and inserted atomically; cities scoped", async () => {
+test("custom segments are validated atomically; official cities available to every seller", async () => {
   const f = await fixture(),
     lot = await f.lot(2);
   const created = await f.activate(lot.plates[0], "seller-a", {
@@ -105,12 +131,11 @@ test("custom segments are validated and inserted atomically; cities scoped", asy
   assert.equal(created.r.status, 200);
   assert.equal(
     (await f.call("/api/cities", "GET", undefined, "seller-b")).b.length,
-    0,
+    5571,
   );
-  assert.deepEqual(
-    (await f.call("/api/cities", "GET", undefined, "seller-a")).b,
-    ["Porto Alegre"],
-  );
+  const cities = (await f.call("/api/cities", "GET", undefined, "seller-a")).b;
+  assert.ok(cities.includes("Porto Alegre / RS"));
+  assert.ok(cities.includes("Portão / RS"));
   assert.equal(
     (
       await f.activate(lot.plates[1], "seller-a", {
