@@ -1,0 +1,21 @@
+name: Read-only plate diagnostic
+on:
+  push:
+    branches: [diagnostics/plate-a0810-h64p]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    if: github.repository == 'midmake/placa-nfc'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Read specific plate and account flags
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/diagnose-plate-once.mjs
