@@ -42,7 +42,17 @@ test("cidade e segmento sugerem antes de submit, Outros exige descrição e ende
   assert.equal(list.hidden, false);
   assert.match(list.textContent, /Porto Alegre/);
   list.children[0].click();
-  assert.equal(city.value, "Porto Alegre");
+  assert.equal(city.value, "Porto Alegre / RS");
+  await settle();
+  assert.equal(city.validity.valid, true);
+  city.value = "Poa";
+  city.dispatchEvent(new w.Event("input", { bubbles: true }));
+  assert.equal(city.validity.valid, false);
+  await settle();
+  assert.doesNotMatch(list.textContent, /informar a cidade manualmente/);
+  city.value = "Porto Alegre / RS";
+  city.dispatchEvent(new w.Event("input", { bubbles: true }));
+  await settle();
   const segment = form.elements.segment;
   segment.focus();
   await settle();
@@ -231,7 +241,7 @@ async function ui({
       ];
     if (path.startsWith("/api/establishments")) response = [];
     if (path === "/api/cities")
-      response = ["Porto Alegre", "Porto Belo", "São Paulo"];
+      response = ["Porto Alegre / RS", "Porto Belo / SC", "São Paulo / SP"];
     if (path === "/api/activation/verify")
       response = { grant: "b".repeat(64), code: "A3009-K7Q2" };
     return { ok: status < 400, status, json: async () => response };

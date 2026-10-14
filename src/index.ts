@@ -7,6 +7,7 @@ import {
 } from "./security";
 import { parseGoogleURL } from "./google-url";
 import { SEGMENTS } from "./segments";
+import { MUNICIPALITY_LABELS } from "./municipalities";
 import { operations, redirectPlate } from "./operations";
 import {
   professional,
@@ -182,17 +183,7 @@ async function route(
   if (user.must_change_password)
     fail(403, "Troque sua senha temporária antes de continuar.");
   if (path === "/api/cities" && method === "GET") {
-    const rows = (
-      await db
-        .prepare(
-          "SELECT MIN(city) AS city FROM establishments WHERE archived_at IS NULL AND (?='ADMIN' OR owner_id=?) GROUP BY city_key ORDER BY city_key LIMIT 500",
-        )
-        .bind(user.role, user.id)
-        .all<{ city: string }>()
-    ).results;
-    return json([
-      ...new Map(rows.map((r) => [key(r.city), r.city.trim()])).values(),
-    ]);
+    return json(MUNICIPALITY_LABELS);
   }
   const pro = await professional(req, env, user);
   if (pro) return pro;

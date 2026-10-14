@@ -1,6 +1,7 @@
 import { digest, hashPassword, randomToken } from "./security";
 import { parseGoogleURL, validateGoogleDestination } from "./google-url";
 import { SEGMENTS } from "./segments";
+import { officialMunicipality } from "./municipalities";
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
@@ -196,7 +197,7 @@ export async function limitLogin(db: D1Database, email: string, ip: string) {
 }
 export async function establishmentInput(b: Row, env: Env) {
   const name = text(b.name, "Nome"),
-    city = text(b.city, "Cidade", 100),
+    city = officialMunicipality(text(b.city, "Cidade", 100)),
     segment = text(
       b.segment === "__other__" ? b.segment_other : b.segment,
       "Segmento",
@@ -204,6 +205,7 @@ export async function establishmentInput(b: Row, env: Env) {
     ),
     responsible = text(b.responsible, "Responsável"),
     phone = text(b.phone, "Telefone", 30);
+  if (!city) fail(400, "Selecione uma cidade cadastrada na lista, com sua UF.");
   const normalized = normalizePhone(phone);
   if (!/^\d{10,15}$/.test(normalized))
     fail(400, "Telefone inválido. Informe DDD e número.");
