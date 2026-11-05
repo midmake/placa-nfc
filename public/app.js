@@ -95,11 +95,12 @@ function menu() {
           ...(me.commercial_type === "REVENDEDOR" ? ["balance"] : []),
         ];
   const secondary = [
-    ...(me.role === "ADMIN" ? ["plates", "users", "resellers", "audit"] : []),
+    ...(me.role === "ADMIN" ? ["plates", "users", "resellers", "search", "audit"] : []),
     "password",
     "logout",
   ];
   const labels = {
+    search: "Busca global",
     pix: "Gerar link Pix",
     dashboard: "Início",
     batches: "Lotes",
@@ -115,7 +116,7 @@ function menu() {
   };
   const item = (p) =>
     `<button data-page="${p}" ${p === page ? 'aria-current="page"' : ""} class="${p === page ? "selected" : ""}">${labels[p]}</button>`;
-  nav.innerHTML = `<div class="nav-primary"><a class="button secondary" href="https://www.superchat.com/pt/tools/google-review-link-generator" target="_blank" rel="noopener noreferrer" title="Abra o gerador externo para criar o link direto de avaliação Google.">GERADOR DE LINKS GMN</a></div><details class="nav-more"><summary aria-label="Menu de navegação" title="Menu de navegação"><span aria-hidden="true">☰</span></summary><div>${[...primary, ...secondary].map(item).join("")}</div></details>`;
+  nav.innerHTML = `<button class="home-shortcut" data-page="${me.role === "ADMIN" ? "dashboard" : "establishments"}" aria-label="Início" title="Início"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M2 11 12 3l10 8M5 9v12h5v-7h4v7h5V9"/></svg></button><div class="nav-primary"><a class="button secondary" href="https://www.superchat.com/pt/tools/google-review-link-generator" target="_blank" rel="noopener noreferrer" title="Abra o gerador externo para criar o link direto de avaliação Google.">GERADOR DE LINKS GMN</a></div><details class="nav-more"><summary aria-label="Menu de navegação" title="Menu de navegação"><span aria-hidden="true">☰</span></summary><div>${[...primary, ...secondary].map(item).join("")}</div></details>`;
   nav
     .querySelectorAll("button")
     .forEach(
@@ -140,6 +141,7 @@ async function go(p) {
   }
   await {
     dashboard,
+    search: searchPage,
     pix: () => pixList(),
     balance: balances,
     plates,
