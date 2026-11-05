@@ -14,8 +14,8 @@ async function pixList(cursor) {
 async function pixDetail(id) {
   const r=await api("/pix-links/"+id);
   if(page!=="pix"||me?.role!=="ADMIN")return;
-  app.innerHTML=`<section class="panel narrow"><h1>${esc(r.store)}</h1><p>Recebedor: <strong>${esc(r.recipient)}</strong></p><label>${esc(pixKinds[r.kind])}<textarea readonly>${esc(r.pix_value)}</textarea></label><label>Link permanente para a NFC<input id="pix-url" readonly value="${esc(r.url)}"></label><button id="pix-copy-link">Copiar link para a NFC</button> <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Abrir página Pix</a><p><button class="secondary" id="pix-edit">Editar</button> <button class="secondary" id="pix-back">Voltar às lojas</button></p></section>`;
-  on("pix-copy-link","click",async()=>{try{await navigator.clipboard.writeText(r.url);message("Link copiado.");}catch{document.querySelector("#pix-url").select();message("Use Copiar no menu do celular.");}});
+  app.innerHTML=`<section class="panel narrow"><h1>${esc(r.store)}</h1><p>Recebedor: <strong>${esc(r.recipient)}</strong></p><label>${esc(pixKinds[r.kind])}<textarea readonly>${esc(r.pix_value)}</textarea></label><label>Link permanente para a NFC<input id="pix-url" readonly value="${esc(r.url)}"></label><button id="pix-copy-link">Copiar link para a NFC</button> <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Abrir página Pix</a><p role="status" class="pix-copy-feedback" id="pix-copy-feedback"></p><p><button class="secondary" id="pix-edit">Editar</button> <button class="secondary" id="pix-back">Voltar às lojas</button></p></section>`;
+  on("pix-copy-link","click",()=>copyPixField(document.querySelector("#pix-url"),document.querySelector("#pix-copy-feedback"),"Link copiado"));
   on("pix-edit","click",()=>pixForm(r));on("pix-back","click",()=>pixList());
 }
 function pixForm(r={}) {
