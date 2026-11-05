@@ -10,7 +10,7 @@ function accessEntry() {
   document.body.classList.add("login-view");
   nav.innerHTML = "";
   message("");
-  app.innerHTML = `<section class="panel narrow"><img class="access-logo" src="/gear-go-oficial.png" alt="Gear Go Digital"><h1>${invite ? "Crie seu acesso" : "Redefina sua senha"}</h1><p>Escolha uma senha pessoal com pelo menos 12 caracteres.</p><form id="accept-access"><label>Senha<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><label>Confirme a senha<input name="confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><button class="full">${invite ? "Criar meu acesso" : "Salvar nova senha"}</button></form><button id="access-back" class="secondary full">Voltar ao login</button></section>`;
+  app.innerHTML = `<img class="access-logo" src="/gear-go-oficial.png" alt="Gear Go Digital"><section class="panel narrow"><h1>${invite ? "Crie seu acesso" : "Redefina sua senha"}</h1><p>Escolha uma senha pessoal com pelo menos 12 caracteres.</p><form id="accept-access"><label>Senha<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><label>Confirme a senha<input name="confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><button class="full">${invite ? "Criar meu acesso" : "Salvar nova senha"}</button></form><button id="access-back" class="secondary full">Voltar ao login</button></section>`;
   on("accept-access", "submit", async (e) => {
     const b = values(e);
     if (b.password !== b.confirmation)
@@ -172,6 +172,8 @@ async function balances(userId = me.id) {
   );
 }
 async function dashboard() {
+  const version = navigationVersion;
+  const current = () => page === "dashboard" && me?.role === "ADMIN" && version === navigationVersion;
   const d = await api("/dashboard"),
     labels = {
       active: "Placas ativas",
@@ -182,6 +184,7 @@ async function dashboard() {
       invitations: "Convites pendentes",
       month_activations: "Ativações neste mês",
     };
+  if (!current()) return;
   message("");
   app.innerHTML = `<h1>Visão geral</h1><p>Olá, ${esc(me.name)}.</p><div class="quick-actions"><button id="quick-activate">Ativar placa</button><button id="quick-people" class="secondary">Equipe GearGo</button><button id="quick-resellers" class="secondary">Revendedores</button></div><div class="stats">${Object.entries(
     labels,
@@ -199,8 +202,14 @@ async function dashboard() {
   on("dashboard-lots", "click", () => go("batches"));
   on("global-search", "submit", (e) => globalSearch(values(e).q));
   bindTrace();
-  const products = await api("/products");
-  document.querySelector("#products").innerHTML = products
+  const container = app.querySelector("#products");
+  let products;
+  try { products = await api("/products"); } catch (error) {
+    if (current() && container?.isConnected) throw error;
+    return;
+  }
+  if (!current() || !container?.isConnected) return;
+  container.innerHTML = products
     .map(
       (p) =>
         `<p>${esc(p.name)} — ${p.state === "ACTIVE" ? "Ativo" : "Em breve"}</p>`,

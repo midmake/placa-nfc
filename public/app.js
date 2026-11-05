@@ -5,7 +5,8 @@ const app = document.querySelector("#app"),
 let me = null,
   categories = [],
   users = [],
-  page = "plates";
+  page = "plates",
+  navigationVersion = 0;
 const esc = (v) =>
   String(v ?? "").replace(
     /[&<>"']/g,
@@ -114,7 +115,7 @@ function menu() {
   };
   const item = (p) =>
     `<button data-page="${p}" ${p === page ? 'aria-current="page"' : ""} class="${p === page ? "selected" : ""}">${labels[p]}</button>`;
-  nav.innerHTML = `<div class="nav-primary">${primary.map(item).join("")}<a class="button secondary" href="https://www.superchat.com/pt/tools/google-review-link-generator" target="_blank" rel="noopener noreferrer" title="Abra o gerador externo para criar o link direto de avaliação Google.">Gerador de links</a></div><details class="nav-more" ${secondary.includes(page) ? "open" : ""}><summary>Mais</summary><div>${secondary.map(item).join("")}</div></details>`;
+  nav.innerHTML = `<div class="nav-primary"><a class="button secondary" href="https://www.superchat.com/pt/tools/google-review-link-generator" target="_blank" rel="noopener noreferrer" title="Abra o gerador externo para criar o link direto de avaliação Google.">GERADOR DE LINKS GMN</a></div><details class="nav-more"><summary aria-label="Menu de navegação" title="Menu de navegação"><span aria-hidden="true">☰</span></summary><div>${[...primary, ...secondary].map(item).join("")}</div></details>`;
   nav
     .querySelectorAll("button")
     .forEach(
@@ -126,6 +127,7 @@ function menu() {
 async function go(p) {
   document.body.classList.remove("login-view");
   message("");
+  navigationVersion++;
   page = p;
   menu();
   message("");
@@ -154,7 +156,7 @@ function login() {
   document.body.classList.add("login-view");
   nav.innerHTML = "";
   message("");
-  app.innerHTML = `<div class="login-layout"><section class="login-intro"><img class="official-logo" src="/gear-go-oficial.png" width="1536" height="512" alt="Gear Go Digital"><p class="eyebrow">GEAR GO DIGITAL</p><h1>Conexões reais.<br>Gestão simples.</h1><p>Suas placas, seus clientes.<br>Tudo no mesmo lugar.</p><div class="signal-line" aria-hidden="true"></div><small>Acesso exclusivo da equipe</small></section><section class="panel login-panel"><h2>${pendingQR() ? "Entre para ativar sua placa" : "Bem-vindo de volta"}</h2><p class="muted">${pendingQR() ? "Depois do login, confirme o código impresso na placa." : "Acesse sua operação Gear Go Digital."}</p><form id="login"><label>E-mail<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Senha<input type="password" name="password" autocomplete="current-password" required maxlength="128"></label><button class="full">Entrar</button></form><button id="forgot-password" class="secondary full" type="button">Esqueci minha senha</button><p class="hint">Não há cadastro público. Solicite seu acesso ao administrador.</p></section></div>`;
+  app.innerHTML = `<div class="login-layout"><section class="login-intro"><img class="official-logo" src="/gear-go-oficial.png" width="900" height="270" alt="Gear Go Digital"><p class="eyebrow">GEAR GO DIGITAL</p><h1>Conexões reais.<br>Gestão simples.</h1><p>Suas placas, seus clientes.<br>Tudo no mesmo lugar.</p><div class="signal-line" aria-hidden="true"></div><small>Acesso exclusivo da equipe</small></section><section class="panel login-panel"><h2>${pendingQR() ? "Entre para ativar sua placa" : "Bem-vindo de volta"}</h2><p class="muted">${pendingQR() ? "Depois do login, confirme o código impresso na placa." : "Acesse sua operação Gear Go Digital."}</p><form id="login"><label>E-mail<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Senha<input type="password" name="password" autocomplete="current-password" required maxlength="128"></label><button class="full">Entrar</button></form><button id="forgot-password" class="secondary full" type="button">Esqueci minha senha</button><p class="hint">Não há cadastro público. Solicite seu acesso ao administrador.</p></section></div>`;
   on("forgot-password", "click", () => forgotPassword());
   on("login", "submit", async (e) => {
     me = await api("/login", "POST", values(e));

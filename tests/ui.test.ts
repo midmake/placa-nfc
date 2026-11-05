@@ -96,7 +96,9 @@ for (const profile of [
       const link = w.document.querySelector('nav a[target="_blank"]');
       assert.equal(Boolean(w.document.querySelector('[data-page="pix"]')),profile.role === "ADMIN");
       assert.ok(link);
-      assert.equal(link.textContent, "Gerador de links");
+      assert.equal(link.textContent, "GERADOR DE LINKS GMN");
+      assert.equal(w.document.querySelectorAll("#nav > .nav-primary button").length, 0);
+      assert.equal(w.document.querySelector(".nav-more").open, false);
       assert.equal(
         link.href,
         "https://www.superchat.com/pt/tools/google-review-link-generator",
@@ -587,5 +589,21 @@ test("ADMIN abre a área Pix e escolhe o tipo de dado no cadastro",async()=>{
   const form=w.document.querySelector('#pix-form');
   assert.ok(form.elements.store && form.elements.recipient && form.elements.pix_value);
   assert.deepEqual(Array.from(form.elements.kind.options,(o:any)=>o.value),["","cpf","cnpj","email","phone","random","payload"]);
+  dom.window.close();
+});
+
+test("troca para Clientes descarta resposta atrasada de Produtos", async () => {
+  const {w,dom}=await ui({logged:true,role:"ADMIN",url:"https://test.invalid/"});
+  const fetch=w.fetch;
+  let release!:()=>void;
+  w.fetch=(...args:any[])=>String(args[0]).endsWith("/api/products")
+    ? new Promise(resolve=>{release=()=>resolve({ok:true,json:async()=>[]});})
+    : fetch(...args);
+  w.document.querySelector('[data-page="dashboard"]').click(); await settle();
+  assert.ok(release);
+  w.document.querySelector('[data-page="establishments"]').click(); await settle();
+  release(); await settle();
+  assert.equal(w.document.querySelector("#products"),null);
+  assert.equal(w.document.querySelector("#notice").textContent,"");
   dom.window.close();
 });
