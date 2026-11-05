@@ -1,3 +1,4 @@
+import { publicPix, adminPix } from "./pix";
 import {
   digest,
   hashPassword,
@@ -49,6 +50,7 @@ async function route(
   const url = new URL(req.url),
     path = url.pathname,
     method = req.method;
+  if (path.startsWith("/pix/")) return publicPix(req,env,path);
   if (path.startsWith("/r/") && (method === "GET" || method === "HEAD"))
     return redirectPlate(req, env);
   if (/^\/(convite|redefinir)\/[^/]+$/.test(path)) {
@@ -182,6 +184,7 @@ async function route(
   }
   if (user.must_change_password)
     fail(403, "Troque sua senha temporária antes de continuar.");
+  if (path === "/api/pix-links" || path.startsWith("/api/pix-links/")) return adminPix(req,env,user,path);
   if (path === "/api/cities" && method === "GET") {
     return json(MUNICIPALITY_LABELS);
   }

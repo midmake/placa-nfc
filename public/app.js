@@ -87,7 +87,7 @@ function menu() {
   }
   const primary =
     me.role === "ADMIN"
-      ? ["dashboard", "batches", "establishments", "activate"]
+      ? ["dashboard", "batches", "establishments", "activate", "pix"]
       : [
           "establishments",
           "activate",
@@ -99,6 +99,7 @@ function menu() {
     "logout",
   ];
   const labels = {
+    pix: "Gerar link Pix",
     dashboard: "Início",
     batches: "Lotes",
     establishments: "Clientes",
@@ -137,6 +138,7 @@ async function go(p) {
   }
   await {
     dashboard,
+    pix: () => pixList(),
     balance: balances,
     plates,
     establishments,
