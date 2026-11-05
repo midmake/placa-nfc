@@ -94,6 +94,7 @@ for (const profile of [
         ...profile,
       });
       const link = w.document.querySelector('nav a[target="_blank"]');
+      assert.equal(Boolean(w.document.querySelector('[data-page="pix"]')),profile.role === "ADMIN");
       assert.ok(link);
       assert.equal(link.textContent, "Gerador de links");
       assert.equal(
@@ -221,6 +222,7 @@ async function ui({
         recent: [],
         batches: [],
       };
+    if (path === "/api/pix-links") response={items:[],next:null};
     if (path === "/api/products")
       response = [
         { name: "Google Reviews", state: "ACTIVE" },
@@ -247,7 +249,7 @@ async function ui({
     return { ok: status < 400, status, json: async () => response };
   };
   w.eval(
-    ["flow.js", "operations-ui.js", "professional-ui.js", "app.js", "ux.js"]
+    ["flow.js", "operations-ui.js", "professional-ui.js", "pix-admin.js", "app.js", "ux.js"]
       .map(source)
       .join("\n"),
   );
@@ -575,5 +577,15 @@ test("filtros de lote e prévia não confundem lote comercial com PDF de teste",
     w.document.querySelector('button[value="production"]').disabled,
     true,
   );
+  dom.window.close();
+});
+
+test("ADMIN abre a área Pix e escolhe o tipo de dado no cadastro",async()=>{
+  const {w,dom}=await ui({logged:true,role:"ADMIN",url:"https://test.invalid/"});
+  w.document.querySelector('[data-page="pix"]').click();await settle();
+  w.document.querySelector('#pix-new').click();await settle();
+  const form=w.document.querySelector('#pix-form');
+  assert.ok(form.elements.store && form.elements.recipient && form.elements.pix_value);
+  assert.deepEqual(Array.from(form.elements.kind.options,(o:any)=>o.value),["","cpf","cnpj","email","phone","random","payload"]);
   dom.window.close();
 });
