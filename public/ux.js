@@ -276,3 +276,17 @@ function enhanceSuggestions() {
     }
   });
 })();
+
+// Dismiss transient menus and read-only help, never a form being edited.
+document.addEventListener("click", e => {
+  for(const box of document.querySelectorAll("details.nav-more[open],details.counts-help[open]"))
+    if(!box.contains(e.target)) box.open=false;
+});
+document.addEventListener("keydown", e => {
+  if(e.key !== "Escape") return;
+  for(const box of document.querySelectorAll("details.nav-more[open],details.counts-help[open]")) {
+    const inside=box.contains(document.activeElement);
+    box.open=false;
+    if(inside) box.querySelector("summary")?.focus();
+  }
+});

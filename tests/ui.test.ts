@@ -210,6 +210,7 @@ async function ui({
     if (path === "/print-templates.json")
       response = JSON.parse(source("print-templates.json"));
     if (path === "/api/categories") response = [{ name: "Barbearia" }];
+    if (path.startsWith("/api/audit?")) response={entries:[],next_before:null};
     if (path === "/api/dashboard")
       response = {
         counts: {
@@ -251,7 +252,7 @@ async function ui({
     return { ok: status < 400, status, json: async () => response };
   };
   w.eval(
-    ["flow.js", "operations-ui.js", "professional-ui.js", "pix-admin.js", "app.js", "ux.js"]
+    ["flow.js", "operations-ui.js", "activation-chart.js", "professional-ui.js", "pix-admin.js", "app.js", "ux.js"]
       .map(source)
       .join("\n"),
   );
@@ -605,5 +606,30 @@ test("troca para Clientes descarta resposta atrasada de Produtos", async () => {
   release(); await settle();
   assert.equal(w.document.querySelector("#products"),null);
   assert.equal(w.document.querySelector("#notice").textContent,"");
+  dom.window.close();
+});
+
+test("gráfico ADMIN percorre histórico, ignora testes e atribuições e agrupa no horário de Brasília", async()=>{
+  const {w,dom}=await ui({logged:true,role:"ADMIN",url:"https://test.invalid/"});
+  const original=w.fetch;
+  const day=new Date(Date.now()-2*86400000).toISOString().slice(0,10);
+  const rec={created_at:day+"T02:15:00Z",action:"activated",entity_type:"plate",new_data:'{"is_test":false}'};
+  const pages:string[]=[];
+  w.fetch=async(path:string,...args:any[])=>{
+    if(!path.startsWith("/api/audit?"))return original(path,...args);
+    pages.push(path);
+    const entries=path.includes("before=50")?[rec]:[rec,{...rec,new_data:'{"is_test":true}'},{...rec,action:"assigned"}];
+    return {ok:true,json:async()=>({entries,next_before:pages.length===1?50:null})};
+  };
+  w.document.querySelector(".home-shortcut").click();await settle();
+  const output=w.document.querySelector("#chart-output");
+  assert.equal(pages.length,2);assert.match(output.textContent,/2 ativações no período/);
+  const group=w.document.querySelector("#chart-group");group.value="hour";group.dispatchEvent(new w.Event("change"));
+  assert.match(output.textContent,/Pico: 23h \(2\)/);assert.equal(pages.length,2);
+  const menu=w.document.querySelector(".nav-more");menu.open=true;
+  output.click();assert.equal(menu.open,false);
+  assert.equal(w.document.querySelector("#global-search"),null);
+  w.document.querySelector('[data-page="search"]').click();await settle();
+  assert.ok(w.document.querySelector("#global-search"));
   dom.window.close();
 });

@@ -952,3 +952,13 @@ nav {
 body:not(.login-view) header { background:#102748; }
 body:not(.login-view) .tagline { color:#d7e7fa; }
 .login-view .access-logo { display:block; width:min(64%,270px); margin:0 auto 1rem; }
+body:not(.login-view) header { justify-content:center; background:var(--brand); }
+body:not(.login-view) header .tagline { display:none; }
+body:not(.login-view) .brand .official-logo { width:202px; }
+@media(max-width:540px){body:not(.login-view) .brand .official-logo { width:169px; }}
+#nav:not(:empty) { grid-template-columns:44px minmax(0,1fr) 44px; }
+#nav .home-shortcut { display:grid; place-items:center; width:44px; height:44px; padding:0; }
+.chart-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.6rem; }
+.chart-controls select { width:100%; min-width:0; }
+.activation-bar { display:grid; grid-template-columns:3ch minmax(0,1fr) max-content; gap:.8rem; align-items:center; margin:.25rem 0; font-variant-numeric:tabular-nums; }
+.activation-bar progress { width:100%; height:.75rem; accent-color:var(--brand); }

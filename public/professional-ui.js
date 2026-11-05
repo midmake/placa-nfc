@@ -195,12 +195,12 @@ async function dashboard() {
     )
     .join(
       "",
-    )}</div><section class="panel"><h2>Busca global</h2><form id="global-search" class="search"><label>Código, lote, estabelecimento, nome ou e-mail<input name="q" maxlength="160" required></label><button>Buscar</button></form><div id="global-results"></div></section><section class="panel"><h2>Últimas ativações</h2>${d.recent.map((p) => `<p><button class="secondary" data-trace="${p.id}">${esc(p.physical_code || p.id)}</button> ${esc(p.establishment_name)} · ${esc(p.actor)}<br><small>${esc(new Date(p.activated_at).toLocaleString("pt-BR"))} · ${commercialLabel(p.activation_type)}</small></p>`).join("") || '<p class="empty">Nenhuma ativação ainda.</p>'}</section><section class="panel"><h2>Lotes recentes</h2>${d.batches.map((b) => `<p>${esc(b.name)}${b.is_test ? " · TESTE" : ""}</p>`).join("") || "<p>Nenhum lote.</p>"}<button id="dashboard-lots">Abrir lotes</button></section><details class="panel"><summary>Produtos</summary><div id="products"></div></details>`;
+    )}</div><section class="panel" id="activation-chart"></section><section class="panel"><h2>Últimas ativações</h2>${d.recent.map((p) => `<p><button class="secondary" data-trace="${p.id}">${esc(p.physical_code || p.id)}</button> ${esc(p.establishment_name)} · ${esc(p.actor)}<br><small>${esc(new Date(p.activated_at).toLocaleString("pt-BR"))} · ${commercialLabel(p.activation_type)}</small></p>`).join("") || '<p class="empty">Nenhuma ativação ainda.</p>'}</section><section class="panel"><h2>Lotes recentes</h2>${d.batches.map((b) => `<p>${esc(b.name)}${b.is_test ? " · TESTE" : ""}</p>`).join("") || "<p>Nenhum lote.</p>"}<button id="dashboard-lots">Abrir lotes</button></section><details class="panel"><summary>Produtos</summary><div id="products"></div></details>`;
   on("quick-activate", "click", () => go("activate"));
   on("quick-people", "click", () => go("users"));
   on("quick-resellers", "click", () => go("resellers"));
   on("dashboard-lots", "click", () => go("batches"));
-  on("global-search", "submit", (e) => globalSearch(values(e).q));
+  mountActivationChart(app.querySelector("#activation-chart"));
   bindTrace();
   const container = app.querySelector("#products");
   let products;
@@ -216,9 +216,15 @@ async function dashboard() {
     )
     .join("");
 }
+function searchPage() {
+  if(me?.role !== "ADMIN") return;
+  app.innerHTML = `<section class="panel"><h2>Busca global</h2><form id="global-search" class="search"><label>Código, lote, estabelecimento, nome ou e-mail<input name="q" maxlength="160" required></label><button>Buscar</button></form><div id="global-results"></div></section>`;
+  on("global-search","submit",e=>globalSearch(values(e).q));
+}
 async function globalSearch(q, after = "") {
-  const d = await api("/search?" + new URLSearchParams({ q, after })),
-    container = document.querySelector("#global-results");
+  const container=app.querySelector("#global-results");
+  const d = await api("/search?" + new URLSearchParams({ q, after }));
+  if(!container?.isConnected) return;
   if (!after) container.innerHTML = "";
   container.querySelector("#global-more")?.remove();
   const part = document.createElement("div");
