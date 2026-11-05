@@ -940,3 +940,15 @@ nav {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* One persistent shortcut; operational screens stay inside the menu. */
+#nav:not(:empty) { display:grid; grid-template-columns:minmax(0,1fr) 44px; gap:8px; align-items:start; }
+#nav .nav-primary .button { display:grid; place-items:center; width:100%; height:44px; padding:0 8px; font-size:clamp(.82rem,3.6vw,1rem); white-space:nowrap; }
+.nav-more summary { display:grid; place-items:center; width:44px; height:44px; padding:0; line-height:1; font-size:22px; cursor:pointer; list-style:none; }
+.nav-more summary::-webkit-details-marker { display:none; }
+.nav-more > div { max-height:60vh; overflow:auto; }
+.quick-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+#quick-activate { grid-column:1/-1; }
+body:not(.login-view) header { background:#102748; }
+body:not(.login-view) .tagline { color:#d7e7fa; }
+.login-view .access-logo { display:block; width:min(64%,270px); margin:0 auto 1rem; }
